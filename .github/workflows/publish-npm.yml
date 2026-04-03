@@ -1,0 +1,110 @@
+name: Tag Release & Publish npm
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: tag-release-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run build
+        run: npm run build
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Validate package is publishable
+        run: |
+          node -e "const p=require('./package.json'); if (p.private) { console.error('package.json has private=true'); process.exit(1); }"
+
+      - name: Verify package.json and package-lock.json versions are in sync
+        run: |
+          node <<'NODE'
+          const pkg = require("./package.json");
+          const lock = require("./package-lock.json");
+
+          const lockTopVersion = lock.version;
+          const lockRootVersion = lock.packages?.[""]?.version;
+          const mismatches = [];
+
+          if (lockTopVersion !== pkg.version) {
+            mismatches.push(`package-lock.json version (${lockTopVersion}) != package.json version (${pkg.version})`);
+          }
+          if (lockRootVersion && lockRootVersion !== pkg.version) {
+            mismatches.push(`package-lock.json packages[\"\"] version (${lockRootVersion}) != package.json version (${pkg.version})`);
+          }
+
+          if (mismatches.length > 0) {
+            console.error(mismatches.join("\n"));
+            process.exit(1);
+          }
+
+          console.log(`Version sync OK: ${pkg.version}`);
+          NODE
+
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${RELEASE_TAG#v}"
+
+          echo "tag: $RELEASE_TAG"
+          echo "package version: $PKG_VERSION"
+
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag and package.json version mismatch"
+            exit 1
+          fi
+
+      - name: Smoke check package tarball
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$PKG_VERSION" == *-* ]]; then
+            npm publish --access public --provenance --tag beta
+          else
+            npm publish --access public --provenance
+          fi
+
+      - name: Create GitHub Release from tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release already exists for $RELEASE_TAG"
+          else
+            gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes
+          fi
