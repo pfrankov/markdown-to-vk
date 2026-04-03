@@ -31,5 +31,23 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.2"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "author": {
+    "name": "Pavel Frankov",
+    "url": "https://github.com/pfrankov"
+  },
+  "keywords": [
+    "vk",
+    "vkontakte",
+    "markdown",
+    "converter"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pfrankov/markdown-to-vk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pfrankov/markdown-to-vk/issues"
+  },
+  "homepage": "https://github.com/pfrankov/markdown-to-vk#readme"
 }
