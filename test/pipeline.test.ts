@@ -15,6 +15,59 @@ import {
   strongTransform,
   tableTransform,
 } from "../src/pipeline";
+import type { VkMarkdownChunk } from "../src/types";
+
+const defaultPipelineMarkdown = [
+  "# title",
+  "---",
+  "> quote",
+  "- [ ] task",
+  "**a****b** and _x_ and ***y*** and [z](https://example.com)",
+].join("\n");
+
+const expectSingleRenderedChunk = (rendered: VkMarkdownChunk[]): VkMarkdownChunk => {
+  expect(rendered).toHaveLength(1);
+
+  const [chunk] = rendered;
+  expect(chunk).toBeDefined();
+
+  return chunk as VkMarkdownChunk;
+};
+
+const expectDefaultPipelineRenderedText = (text: string): void => {
+  expect(text).toContain("TITLE");
+  expect(text).toContain("───");
+  expect(text).toContain("> quote");
+  expect(text).toContain("□ task");
+  expect(text).toContain("ab and x and y and z");
+};
+
+const getDefaultPipelineOffsets = (text: string) => ({
+  boldAbOffset: text.indexOf("ab and"),
+  headingOffset: text.indexOf("TITLE"),
+  quoteOffset: text.indexOf("> quote"),
+  xOffset: text.indexOf("x and y"),
+  yOffset: text.indexOf("y and z"),
+  zOffset: text.lastIndexOf("z"),
+});
+
+const expectDefaultPipelineRenderedItems = (chunk: VkMarkdownChunk): void => {
+  const { boldAbOffset, headingOffset, quoteOffset, xOffset, yOffset, zOffset } = getDefaultPipelineOffsets(
+    chunk.text,
+  );
+
+  expect(chunk.items).toEqual(
+    expect.arrayContaining([
+      { type: "bold", offset: headingOffset, length: "TITLE".length },
+      { type: "italic", offset: quoteOffset, length: "> quote".length },
+      { type: "bold", offset: boldAbOffset, length: 2 },
+      { type: "italic", offset: xOffset, length: 1 },
+      { type: "bold", offset: yOffset, length: 1 },
+      { type: "italic", offset: yOffset, length: 1 },
+      { type: "url", offset: zOffset, length: 1, url: "https://example.com" },
+    ]),
+  );
+};
 
 describe("pipeline and renderer", () => {
   it("exposes transform modes", () => {
@@ -83,43 +136,11 @@ describe("pipeline and renderer", () => {
 
   it("default pipeline handles inline and block markdown plus contiguous bold merge", () => {
     const pipeline = createMarkdownToVkPipeline();
-    const markdown = [
-      "# title",
-      "---",
-      "> quote",
-      "- [ ] task",
-      "**a****b** and _x_ and ***y*** and [z](https://example.com)",
-    ].join("\n");
+    const rendered = pipeline.render(defaultPipelineMarkdown);
+    const chunk = expectSingleRenderedChunk(rendered);
 
-    const rendered = pipeline.render(markdown);
-    expect(rendered).toHaveLength(1);
-
-    const [chunk] = rendered;
-    expect(chunk).toBeDefined();
-    expect(chunk?.text).toContain("TITLE");
-    expect(chunk?.text).toContain("───");
-    expect(chunk?.text).toContain("> quote");
-    expect(chunk?.text).toContain("□ task");
-    expect(chunk?.text).toContain("ab and x and y and z");
-
-    const boldAbOffset = chunk?.text.indexOf("ab and") ?? -1;
-    const headingOffset = chunk?.text.indexOf("TITLE") ?? -1;
-    const quoteOffset = chunk?.text.indexOf("> quote") ?? -1;
-    const xOffset = chunk?.text.indexOf("x and y") ?? -1;
-    const yOffset = chunk?.text.indexOf("y and z") ?? -1;
-    const zOffset = chunk?.text.lastIndexOf("z") ?? -1;
-
-    expect(chunk?.items).toEqual(
-      expect.arrayContaining([
-        { type: "bold", offset: headingOffset, length: "TITLE".length },
-        { type: "italic", offset: quoteOffset, length: "> quote".length },
-        { type: "bold", offset: boldAbOffset, length: 2 },
-        { type: "italic", offset: xOffset, length: 1 },
-        { type: "bold", offset: yOffset, length: 1 },
-        { type: "italic", offset: yOffset, length: 1 },
-        { type: "url", offset: zOffset, length: 1, url: "https://example.com" },
-      ]),
-    );
+    expectDefaultPipelineRenderedText(chunk.text);
+    expectDefaultPipelineRenderedItems(chunk);
   });
 
   it("does not parse markdown inside fenced code blocks", () => {
