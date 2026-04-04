@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>VK Table Alignment Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Geneva, sans-serif;
+    font-size: 15px;
+    line-height: 20px;
+    background: #f5f5f5;
+    padding: 20px;
+    color: #222;
+  }
+  h1 { font-size: 22px; margin-bottom: 8px; }
+  h2 { font-size: 16px; margin-bottom: 4px; color: #333; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 16px; }
+
+  .metrics-panel {
+    display: flex; gap: 24px; margin-bottom: 24px; padding: 12px 16px;
+    background: #fff; border-radius: 8px; border: 1px solid #ddd;
+  }
+  .metric { text-align: center; }
+  .metric-label { font-size: 11px; color: #888; text-transform: uppercase; }
+  .metric-value { font-size: 24px; font-weight: 600; }
+  .metric-value.good { color: #2a9d2a; }
+  .metric-value.ok { color: #c97800; }
+  .metric-value.bad { color: #d32f2f; }
+
+  .table-card {
+    background: #fff; border-radius: 8px; border: 1px solid #ddd;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .table-source {
+    font-family: monospace; font-size: 12px; background: #f8f8f8;
+    padding: 8px; border-radius: 4px; margin-bottom: 12px;
+    white-space: pre; overflow-x: auto; color: #555;
+  }
+  .table-views { display: flex; gap: 16px; }
+  .table-view { flex: 1; }
+  .table-view-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 4px; }
+
+  .vk-message {
+    background: #edf2f7; border-radius: 12px; padding: 10px 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Geneva, sans-serif;
+    font-size: 15px; line-height: 20px; white-space: pre-wrap;
+    display: inline-block; max-width: 100%;
+  }
+
+  .sep-view {
+    position: relative; display: inline-block;
+    background: #f8f8f8; border-radius: 12px; padding: 10px 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Geneva, sans-serif;
+    font-size: 15px; line-height: 20px; white-space: pre-wrap;
+  }
+  .sep-marker {
+    position: absolute; top: 0; bottom: 0; width: 1px;
+    background: rgba(220, 40, 40, 0.5); pointer-events: none;
+  }
+  .sep-char { color: red; font-weight: normal; }
+
+  .card-metrics {
+    margin-top: 8px; font-size: 12px; color: #888;
+    display: flex; gap: 16px;
+  }
+  .card-metric-bad { color: #d32f2f; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>VK Table Alignment Demo</h1>
+<p class="subtitle">Rendered with calibrated width estimation. Lower drift = better alignment.</p>
+
+<div class="metrics-panel" id="globalMetrics">
+  <div class="metric"><div class="metric-label">Avg Score</div><div class="metric-value" id="avgScore">--</div></div>
+  <div class="metric"><div class="metric-label">Avg Mean Drift</div><div class="metric-value" id="avgDrift">--</div></div>
+  <div class="metric"><div class="metric-label">Worst Drift</div><div class="metric-value" id="worstDrift">--</div></div>
+  <div class="metric"><div class="metric-label">Tables</div><div class="metric-value" id="tableCount">--</div></div>
+</div>
+
+<div id="tables"></div>
+
+<script type="module">
+import { createMarkdownToVkPipeline } from "../dist/index.js";
+
+const TABLES = [
+  {
+    title: "Baseline pricing table",
+    md: `| Name | Qty | Price |
+| --- | ---: | --- |
+| A | 12 | _ok_ |
+| B | 3 | 42 |
+| C | 125 | ***draft*** |`
+  },
+  {
+    title: "Mixed words and auto-number columns",
+    md: `| Left | RightWords | AutoNumbers | Cents |
+| --- | --- | --- | --- |
+| alpha | word | 10 | |
+| beta | tall | 200 | |
+| b | WWW | 3000 | |`
+  },
+  {
+    title: "Width comparison matrix",
+    md: `| Narrow | Wide | Digits | Cyrillic | C |
+| --- | --- | --- | --- | --- |
+| aaa | WWWWWW | 111111 | цифры | 3 |
+| iiil | mmmmWW | 42.90 | Юрий | |
+| ООО | ЖШЩОрб | 100000 | укоЕ | |`
+  },
+  {
+    title: "Styled comparison in the same row",
+    md: `| plain | **bold** | *italic* | ***bold+italic*** | Word 1 | Word 2 |
+| --- | --- | --- | --- | --- | --- |
+| test | **test** | *test* | ***test*** | Short | LongerText |
+| abc | **abc** | *abc* | ***abc*** | Hi | W |`
+  },
+  {
+    title: "Emoji and mixed scripts",
+    md: `| Icon | Description | Count |
+| --- | --- | ---: |
+| 🔥 | Hot item | 42 |
+| ✨ | Sparkle effect | 1 |
+| 🚀 | Launch ready | 999 |
+| 💡 | Ideas | 7 |`
+  },
+  {
+    title: "Bold header with slim body",
+    md: `| API | Status | Info |
+| --- | --- | --- |
+| iii | ok | a |
+| lll | err | bb |
+| fff | warn | ccc |`
+  },
+  {
+    title: "Currency and numbers",
+    md: `| Item | Price | Qty | Total |
+| --- | ---: | ---: | ---: |
+| Widget | $12.50 | 100 | $1,250 |
+| Gadget | €3.99 | 42 | €167.58 |
+| Thing | ₽999 | 5 | ₽4,995 |`
+  },
+  {
+    title: "Cyrillic-heavy table",
+    md: `| Имя | Фамилия | Должность |
+| --- | --- | --- |
+| Алексей | Жуков | Программист |
+| Мария | Широкова | Дизайнер |
+| Юрий | Щербаков | Менеджер |`
+  },
+];
+
+const pipeline = createMarkdownToVkPipeline();
+
+function applyFormatItems(text, items) {
+  const chars = [...text];
+  const tags = new Array(chars.length).fill(null).map(() => ({ boldStart: false, boldEnd: false, italicStart: false, italicEnd: false }));
+
+  for (const item of items) {
+    // offset/length are in UTF-16 code units, same as string indices
+    let charIdx = 0;
+    let codeUnitIdx = 0;
+    while (codeUnitIdx < item.offset && charIdx < chars.length) {
+      codeUnitIdx += chars[charIdx].length;
+      charIdx++;
+    }
+    const startCharIdx = charIdx;
+
+    let remaining = item.length;
+    while (remaining > 0 && charIdx < chars.length) {
+      remaining -= chars[charIdx].length;
+      charIdx++;
+    }
+    const endCharIdx = charIdx;
+
+    if (startCharIdx < tags.length && endCharIdx > 0) {
+      if (item.type === "bold") {
+        tags[startCharIdx].boldStart = true;
+        if (endCharIdx - 1 < tags.length) tags[endCharIdx - 1].boldEnd = true;
+      }
+      if (item.type === "italic") {
+        tags[startCharIdx].italicStart = true;
+        if (endCharIdx - 1 < tags.length) tags[endCharIdx - 1].italicEnd = true;
+      }
+    }
+  }
+
+  let html = "";
+  for (let i = 0; i < chars.length; i++) {
+    if (tags[i].boldStart) html += "<b>";
+    if (tags[i].italicStart) html += "<i>";
+    html += chars[i].replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    if (tags[i].italicEnd) html += "</i>";
+    if (tags[i].boldEnd) html += "</b>";
+  }
+  return html;
+}
+
+function renderTable(md) {
+  const chunks = pipeline.render(md);
+  const chunk = chunks[0];
+  if (!chunk) return { html: "", text: "", items: [] };
+  return { html: applyFormatItems(chunk.text, chunk.items), text: chunk.text, items: chunk.items };
+}
+
+function measureSeparatorDrift(container) {
+  const lines = container.querySelectorAll(".vk-line");
+  if (lines.length < 2) return { score: 100, meanDrift: 0, worstDrift: 0, columns: 0 };
+
+  // Find pipe positions in each line
+  const linePositions = [];
+  for (const line of lines) {
+    const pipes = line.querySelectorAll(".sep-char");
+    const positions = [];
+    for (const pipe of pipes) {
+      const rect = pipe.getBoundingClientRect();
+      positions.push(rect.left + rect.width / 2);
+    }
+    linePositions.push(positions);
+  }
+
+  const maxCols = Math.max(...linePositions.map(p => p.length));
+  if (maxCols === 0) return { score: 100, meanDrift: 0, worstDrift: 0, columns: 0 };
+
+  let totalDrift = 0;
+  let worstDrift = 0;
+  let measurements = 0;
+
+  for (let col = 0; col < maxCols; col++) {
+    const colPositions = linePositions.map(p => p[col]).filter(x => x !== undefined);
+    if (colPositions.length < 2) continue;
+    const mean = colPositions.reduce((a, b) => a + b, 0) / colPositions.length;
+    for (const pos of colPositions) {
+      const drift = Math.abs(pos - mean);
+      totalDrift += drift;
+      worstDrift = Math.max(worstDrift, drift);
+      measurements++;
+    }
+  }
+
+  const meanDrift = measurements > 0 ? totalDrift / measurements : 0;
+  const score = Math.max(0, 100 - meanDrift * 10);
+
+  return { score, meanDrift, worstDrift, columns: maxCols };
+}
+
+function renderTableCard(tableSpec) {
+  const { html, text } = renderTable(tableSpec.md);
+  const lines = text.split("\n");
+
+  const card = document.createElement("div");
+  card.className = "table-card";
+
+  // Title
+  const title = document.createElement("h2");
+  title.textContent = tableSpec.title;
+  card.appendChild(title);
+
+  // Source
+  const source = document.createElement("div");
+  source.className = "table-source";
+  source.textContent = tableSpec.md;
+  card.appendChild(source);
+
+  const views = document.createElement("div");
+  views.className = "table-views";
+
+  // Rendered view
+  const renderedView = document.createElement("div");
+  renderedView.className = "table-view";
+  const renderedLabel = document.createElement("div");
+  renderedLabel.className = "table-view-label";
+  renderedLabel.textContent = "Rendered";
+  renderedView.appendChild(renderedLabel);
+  const msg = document.createElement("div");
+  msg.className = "vk-message";
+  msg.innerHTML = html;
+  renderedView.appendChild(msg);
+  views.appendChild(renderedView);
+
+  // Separator focus view
+  const sepView = document.createElement("div");
+  sepView.className = "table-view";
+  const sepLabel = document.createElement("div");
+  sepLabel.className = "table-view-label";
+  sepLabel.textContent = "Separator Focus";
+  sepView.appendChild(sepLabel);
+  const sepMsg = document.createElement("div");
+  sepMsg.className = "sep-view";
+
+  const htmlLines = html.split("\n");
+  for (let i = 0; i < htmlLines.length; i++) {
+    const lineDiv = document.createElement("div");
+    lineDiv.className = "vk-line";
+    // Highlight pipe chars
+    let lineHtml = htmlLines[i].replace(/\|/g, '<span class="sep-char">|</span>');
+    lineDiv.innerHTML = lineHtml;
+    sepMsg.appendChild(lineDiv);
+  }
+  sepView.appendChild(sepMsg);
+  views.appendChild(sepView);
+
+  card.appendChild(views);
+
+  // Metrics placeholder
+  const metricsDiv = document.createElement("div");
+  metricsDiv.className = "card-metrics";
+  metricsDiv.dataset.metricsTarget = "true";
+  card.appendChild(metricsDiv);
+
+  return { card, sepMsg };
+}
+
+// Render all tables
+const container = document.getElementById("tables");
+const cards = [];
+for (const spec of TABLES) {
+  const { card, sepMsg } = renderTableCard(spec);
+  container.appendChild(card);
+  cards.push({ card, sepMsg, spec });
+}
+
+// Measure after layout
+requestAnimationFrame(() => {
+  const allMetrics = [];
+
+  for (const { card, sepMsg, spec } of cards) {
+    const metrics = measureSeparatorDrift(sepMsg);
+    allMetrics.push(metrics);
+
+    const metricsDiv = card.querySelector("[data-metrics-target]");
+    const cls = metrics.meanDrift < 2 ? "" : metrics.meanDrift < 5 ? "card-metric-bad" : "card-metric-bad";
+    metricsDiv.innerHTML = `
+      <span>Score: <strong>${metrics.score.toFixed(1)}</strong></span>
+      <span>Mean drift: <strong class="${metrics.meanDrift > 3 ? 'card-metric-bad' : ''}">${metrics.meanDrift.toFixed(2)}px</strong></span>
+      <span>Worst: <strong class="${metrics.worstDrift > 5 ? 'card-metric-bad' : ''}">${metrics.worstDrift.toFixed(2)}px</strong></span>
+    `;
+  }
+
+  // Global metrics
+  const avgScore = allMetrics.reduce((a, m) => a + m.score, 0) / allMetrics.length;
+  const avgDrift = allMetrics.reduce((a, m) => a + m.meanDrift, 0) / allMetrics.length;
+  const worstDrift = Math.max(...allMetrics.map(m => m.worstDrift));
+
+  const scoreEl = document.getElementById("avgScore");
+  scoreEl.textContent = avgScore.toFixed(1);
+  scoreEl.className = "metric-value " + (avgScore > 80 ? "good" : avgScore > 50 ? "ok" : "bad");
+
+  const driftEl = document.getElementById("avgDrift");
+  driftEl.textContent = avgDrift.toFixed(2) + "px";
+  driftEl.className = "metric-value " + (avgDrift < 2 ? "good" : avgDrift < 5 ? "ok" : "bad");
+
+  const worstEl = document.getElementById("worstDrift");
+  worstEl.textContent = worstDrift.toFixed(2) + "px";
+  worstEl.className = "metric-value " + (worstDrift < 3 ? "good" : worstDrift < 8 ? "ok" : "bad");
+
+  document.getElementById("tableCount").textContent = allMetrics.length;
+
+  window.__DEMO_METRICS__ = { avgScore, avgDrift, worstDrift, tables: allMetrics };
+});
+</script>
+</body>
+</html>

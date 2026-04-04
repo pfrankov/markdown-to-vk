@@ -2,6 +2,22 @@ import type { VkFormatItem, VkInlineParseResult } from "./types.js";
 
 type WidthAffectingFormatType = "bold" | "italic";
 
+type GlyphClass =
+  | "emoji"
+  | "cjk"
+  | "hangul"
+  | "digit"
+  | "currency"
+  | "narrowPunctuation"
+  | "bracket"
+  | "dash"
+  | "slimLetter"
+  | "wideLetter"
+  | "upperLetter"
+  | "lowerLetter"
+  | "wideSymbol"
+  | "symbol";
+
 type GraphemeSegment = {
   segment: string;
   start: number;
@@ -12,34 +28,103 @@ type TextWidthOptions = {
   extraStyles?: readonly WidthAffectingFormatType[];
 };
 
-export const TABLE_SPACE_WIDTH_UNITS = 4;
+export const TABLE_SPACE_WIDTH_UNITS = 1;
 
-const DEFAULT_CHAR_WIDTH = 6;
-const EMOJI_WIDTH_UNITS = 12;
-const FULLWIDTH_CHAR_WIDTH = 11;
-const WIDE_CHAR_WIDTH = 9;
-const DIGIT_CHAR_WIDTH = 7;
-const UPPERCASE_CHAR_WIDTH = 7;
-const NARROW_CHAR_WIDTH = 3;
-const BRACKET_CHAR_WIDTH = 4;
-const DASH_CHAR_WIDTH = 5;
+const TAB_WIDTH_UNITS = 4;
+const THIN_SPACE_WIDTH = 0.5;
+const HAIR_SPACE_WIDTH = 0.25;
 
-const BOLD_WIDTH_MULTIPLIER = 1.12;
-const ITALIC_WIDTH_MULTIPLIER = 1.06;
+const BASE_WIDTHS: Readonly<Record<GlyphClass, number>> = {
+  emoji: 4.77,
+  cjk: 3.74,
+  hangul: 3.26,
+  digit: 2.23,
+  currency: 2.31,
+  narrowPunctuation: 1.21,
+  bracket: 1.38,
+  dash: 2.16,
+  slimLetter: 1.04,
+  wideLetter: 3.22,
+  upperLetter: 2.54,
+  lowerLetter: 2.1,
+  wideSymbol: 3.21,
+  symbol: 1.82,
+};
+
+const BOLD_MULTIPLIERS: Readonly<Record<GlyphClass, number>> = {
+  emoji: 1,
+  cjk: 1,
+  hangul: 1,
+  digit: 1.08,
+  currency: 1.08,
+  narrowPunctuation: 1.15,
+  bracket: 1.13,
+  dash: 1.06,
+  slimLetter: 1.17,
+  wideLetter: 1.08,
+  upperLetter: 1.05,
+  lowerLetter: 1.08,
+  wideSymbol: 1.06,
+  symbol: 1.07,
+};
+
+const ITALIC_MULTIPLIERS: Readonly<Record<GlyphClass, number>> = {
+  emoji: 1,
+  cjk: 0.97,
+  hangul: 1,
+  digit: 1,
+  currency: 1.08,
+  narrowPunctuation: 1.01,
+  bracket: 1,
+  dash: 0.97,
+  slimLetter: 1,
+  wideLetter: 1,
+  upperLetter: 1,
+  lowerLetter: 1,
+  wideSymbol: 0.98,
+  symbol: 0.99,
+};
+
+const GLYPH_BASE_OVERRIDES: Readonly<Record<string, number>> = {
+  "1": 1.69,
+  r: 1.38,
+  "\u0416": 3.78, // Ж
+  "\u0428": 3.57, // Ш
+  "\u0429": 3.68, // Щ
+  "\u042E": 3.77, // Ю
+  "\u043C": 2.78, // м
+};
 
 const EMOJI_RE = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}]/u;
-const FULLWIDTH_RE =
-  /[\u1100-\u115F\u2329\u232A\u2E80-\u303E\u3040-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE10-\uFE19\uFE30-\uFE6F\uFF01-\uFF60\uFFE0-\uFFE6]/u;
+const EMOJI_PRESENTATION_RE = /[\uFE0F\u200D]/u;
+const CJK_RE =
+  /[\u1100-\u115F\u2329\u232A\u2E80-\u303E\u3040-\uA4CF\uF900-\uFAFF\uFE10-\uFE19\uFE30-\uFE6F\uFF01-\uFF60\uFFE0-\uFFE6]/u;
+const HANGUL_RE = /[\uAC00-\uD7A3]/u;
 const ZERO_WIDTH_RE = /[\p{Mark}\u200B-\u200D\uFE0E\uFE0F]/gu;
 
-const CHAR_WIDTH_RULES: ReadonlyArray<{ pattern: RegExp; width: number }> = [
-  { pattern: /[MWmw@#%&ЖШЩЮЫФжшщюыф]/u, width: WIDE_CHAR_WIDTH },
-  { pattern: /[ilI1\|'"`.,:;!]/u, width: NARROW_CHAR_WIDTH },
-  { pattern: /[()\[\]{}]/u, width: BRACKET_CHAR_WIDTH },
-  { pattern: /[-_~]/u, width: DASH_CHAR_WIDTH },
-  { pattern: /[0-9]/u, width: DIGIT_CHAR_WIDTH },
-  { pattern: /[A-ZА-ЯЁ]/u, width: UPPERCASE_CHAR_WIDTH },
-  { pattern: /[a-zа-яё]/u, width: DEFAULT_CHAR_WIDTH },
+const DIGIT_RE = /[0-9]/u;
+const CURRENCY_RE = /[$€₽£¥]/u;
+const NARROW_PUNCTUATION_RE = /[.,:;!'"`|]/u;
+const BRACKET_RE = /[()[\]{}]/u;
+const DASH_RE = /[-_~+=]/u;
+const SLIM_LETTER_RE = /[Iiljft]/u;
+const WIDE_LETTER_RE = /[MWmwМЖШЩЮЫФжшщюыф]/u;
+const LETTER_RE = /[\p{L}]/u;
+const UPPERCASE_RE = /[\p{Lu}]/u;
+const WIDE_SYMBOL_RE = /[@#%&№]/u;
+
+const GLYPH_CLASSIFIERS: ReadonlyArray<readonly [GlyphClass, (glyph: string) => boolean]> = [
+  ["emoji", (glyph) => EMOJI_RE.test(glyph)],
+  ["hangul", (glyph) => HANGUL_RE.test(glyph)],
+  ["cjk", (glyph) => CJK_RE.test(glyph)],
+  ["digit", (glyph) => DIGIT_RE.test(glyph)],
+  ["currency", (glyph) => CURRENCY_RE.test(glyph)],
+  ["narrowPunctuation", (glyph) => NARROW_PUNCTUATION_RE.test(glyph)],
+  ["bracket", (glyph) => BRACKET_RE.test(glyph)],
+  ["dash", (glyph) => DASH_RE.test(glyph)],
+  ["slimLetter", (glyph) => SLIM_LETTER_RE.test(glyph)],
+  ["wideLetter", (glyph) => WIDE_LETTER_RE.test(glyph)],
+  ["wideSymbol", (glyph) => WIDE_SYMBOL_RE.test(glyph)],
 ];
 
 const createSegmenter = (): Intl.Segmenter | null =>
@@ -87,30 +172,25 @@ const pickRepresentativeGlyph = (segment: string): string => {
   return [...visibleText][0] ?? segment;
 };
 
-const estimateBaseGraphemeWidth = (segment: string): number => {
-  if (segment === " ") {
-    return TABLE_SPACE_WIDTH_UNITS;
+const classifyLetter = (glyph: string): GlyphClass =>
+  UPPERCASE_RE.test(glyph) ? "upperLetter" : "lowerLetter";
+
+const classifyGlyph = (segment: string, glyph: string): GlyphClass => {
+  if (EMOJI_PRESENTATION_RE.test(segment) && EMOJI_RE.test(segment)) {
+    return "emoji";
   }
 
-  if (segment === "\t") {
-    return TABLE_SPACE_WIDTH_UNITS * 4;
+  for (const [glyphClass, matches] of GLYPH_CLASSIFIERS) {
+    if (matches(glyph)) {
+      return glyphClass;
+    }
   }
 
-  if (EMOJI_RE.test(segment)) {
-    return EMOJI_WIDTH_UNITS;
+  if (LETTER_RE.test(glyph)) {
+    return classifyLetter(glyph);
   }
 
-  const glyph = pickRepresentativeGlyph(segment);
-  if (!glyph) {
-    return 0;
-  }
-
-  if (FULLWIDTH_RE.test(glyph)) {
-    return FULLWIDTH_CHAR_WIDTH;
-  }
-
-  const matchedRule = CHAR_WIDTH_RULES.find(({ pattern }) => pattern.test(glyph));
-  return matchedRule?.width ?? DEFAULT_CHAR_WIDTH;
+  return "symbol";
 };
 
 const isWidthAffectingItem = (
@@ -132,33 +212,29 @@ const isStyleActiveInSegment = (
       item.offset + item.length > start,
   );
 
-const applyStyleWidth = (
-  baseWidth: number,
-  segment: string,
-  isBold: boolean,
-  isItalic: boolean,
-): number => {
-  if (baseWidth <= 0 || /^\s+$/u.test(segment)) {
-    return baseWidth;
-  }
-
-  let width = baseWidth;
-
-  if (isBold) {
-    width *= BOLD_WIDTH_MULTIPLIER;
-  }
-
-  if (isItalic) {
-    width *= ITALIC_WIDTH_MULTIPLIER;
-  }
-
-  return width;
-};
-
 const hasExtraStyle = (
   options: TextWidthOptions | undefined,
   style: WidthAffectingFormatType,
 ): boolean => options?.extraStyles?.includes(style) ?? false;
+
+const applyStyleWidth = (
+  baseWidth: number,
+  glyphClass: GlyphClass,
+  isBold: boolean,
+  isItalic: boolean,
+): number => {
+  let width = baseWidth;
+
+  if (isBold) {
+    width *= BOLD_MULTIPLIERS[glyphClass];
+  }
+
+  if (isItalic) {
+    width *= ITALIC_MULTIPLIERS[glyphClass];
+  }
+
+  return width;
+};
 
 export const estimateRenderedTextWidth = (
   rendered: VkInlineParseResult,
@@ -167,14 +243,36 @@ export const estimateRenderedTextWidth = (
   const styleItems = rendered.items.filter(isWidthAffectingItem);
 
   return segmentText(rendered.text).reduce((sum, { segment, start, end }) => {
-    const baseWidth = estimateBaseGraphemeWidth(segment);
+    if (segment === " ") {
+      return sum + TABLE_SPACE_WIDTH_UNITS;
+    }
+
+    if (segment === "\t") {
+      return sum + TAB_WIDTH_UNITS;
+    }
+
+    if (segment === "\u2009" || segment === "\u202F") {
+      return sum + THIN_SPACE_WIDTH;
+    }
+
+    if (segment === "\u200A") {
+      return sum + HAIR_SPACE_WIDTH;
+    }
+
+    const glyph = pickRepresentativeGlyph(segment);
+    if (!glyph) {
+      return sum;
+    }
+
     const isBold =
       hasExtraStyle(options, "bold") ||
       isStyleActiveInSegment(styleItems, "bold", start, end);
     const isItalic =
       hasExtraStyle(options, "italic") ||
       isStyleActiveInSegment(styleItems, "italic", start, end);
+    const glyphClass = classifyGlyph(segment, glyph);
+    const baseWidth = GLYPH_BASE_OVERRIDES[glyph] ?? BASE_WIDTHS[glyphClass];
 
-    return sum + applyStyleWidth(baseWidth, segment, isBold, isItalic);
+    return sum + applyStyleWidth(baseWidth, glyphClass, isBold, isItalic);
   }, 0);
 };

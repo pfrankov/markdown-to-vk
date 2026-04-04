@@ -32,7 +32,9 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - `src/rules-block-table.ts`: markdown table parsing and rendering.
 - `src/rules-block-utils.ts`: shared helpers for block-rule outputs.
 - `src/format-utils.ts`: format item shifting and merging helpers.
+- `src/table-layout.ts`: shared markdown table parsing and layout logic.
 - `src/text-width.ts`: grapheme-aware text width estimation for table layout.
+- `src/canvas-table-transform.ts`: canvas-based text measurement for precise table column alignment (uses `@napi-rs/canvas` or any compatible canvas context).
 - `src/pipeline.ts`: transform wiring, parser/renderer, public runtime functions.
 - `src/index.ts`: public API exports.
 
@@ -43,6 +45,7 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - Tests: `npm test`
 - Watch: `npm run test:watch`
 - Coverage: `npm run test:coverage`
+- Canvas validation: `npm run validate:canvas` (compares canvas vs heuristic drift via Playwright; requires Roboto fonts in `tools/fonts/`)
 
 ## Release and Publishing
 - npm auto-publish is performed by the GitHub Actions workflow: `.github/workflows/publish-npm.yml`.

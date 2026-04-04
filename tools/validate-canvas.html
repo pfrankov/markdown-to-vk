@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Canvas vs Heuristic Table Validation</title>
+<style>
+  @font-face { font-family: 'Roboto'; src: url(fonts/Roboto-Regular.ttf); font-weight: 400; font-style: normal; }
+  @font-face { font-family: 'Roboto'; src: url(fonts/Roboto-Bold.ttf); font-weight: 700; font-style: normal; }
+  @font-face { font-family: 'Roboto'; src: url(fonts/Roboto-Italic.ttf); font-weight: 400; font-style: italic; }
+  @font-face { font-family: 'Roboto'; src: url(fonts/Roboto-BoldItalic.ttf); font-weight: 700; font-style: italic; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 20px;
+    background: #f5f5f5;
+    padding: 20px;
+    color: #222;
+  }
+  h1 { font-size: 22px; margin-bottom: 8px; }
+  h2 { font-size: 16px; margin-bottom: 4px; color: #333; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 16px; }
+
+  .summary-panel {
+    display: flex; gap: 24px; margin-bottom: 24px; padding: 12px 16px;
+    background: #fff; border-radius: 8px; border: 1px solid #ddd;
+  }
+  .summary-group { display: flex; gap: 16px; align-items: center; }
+  .summary-group-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: 600; }
+  .metric { text-align: center; }
+  .metric-label { font-size: 11px; color: #888; text-transform: uppercase; }
+  .metric-value { font-size: 20px; font-weight: 600; }
+  .metric-value.good { color: #2a9d2a; }
+  .metric-value.ok { color: #c97800; }
+  .metric-value.bad { color: #d32f2f; }
+  .verdict { font-size: 20px; font-weight: 700; padding: 4px 12px; border-radius: 6px; }
+  .verdict.pass { background: #e6f4e6; color: #2a9d2a; }
+  .verdict.fail { background: #fde8e8; color: #d32f2f; }
+
+  .table-card {
+    background: #fff; border-radius: 8px; border: 1px solid #ddd;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .table-source {
+    font-family: monospace; font-size: 12px; background: #f8f8f8;
+    padding: 8px; border-radius: 4px; margin-bottom: 12px;
+    white-space: pre; overflow-x: auto; color: #555;
+  }
+  .compare-row { display: flex; gap: 16px; }
+  .compare-col { flex: 1; }
+  .compare-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 4px; font-weight: 600; }
+
+  .sep-view {
+    position: relative; display: inline-block;
+    background: #f8f8f8; border-radius: 12px; padding: 10px 14px;
+    font-family: Roboto, sans-serif;
+    font-size: 15px; line-height: 20px; white-space: pre-wrap;
+  }
+  .sep-char { color: red; font-weight: normal; }
+
+  .card-metrics {
+    margin-top: 8px; font-size: 12px; color: #888;
+    display: flex; gap: 16px;
+  }
+  .card-metric-bad { color: #d32f2f; font-weight: 600; }
+  .card-metric-good { color: #2a9d2a; font-weight: 600; }
+  .winner { border: 2px solid #2a9d2a; }
+</style>
+</head>
+<body>
+<h1>Canvas vs Heuristic — Alignment Validation</h1>
+<p class="subtitle">Side-by-side comparison. Lower drift = better alignment. Canvas must be ≤ heuristic drift.</p>
+
+<div class="summary-panel" id="summaryPanel">
+  <div class="metric"><div class="metric-label">Verdict</div><div class="verdict" id="verdict">…</div></div>
+  <div style="border-left: 1px solid #ddd;"></div>
+  <div>
+    <div class="summary-group-label">Heuristic</div>
+    <div class="summary-group">
+      <div class="metric"><div class="metric-label">Avg Drift</div><div class="metric-value" id="heuristicAvgDrift">--</div></div>
+      <div class="metric"><div class="metric-label">Worst</div><div class="metric-value" id="heuristicWorst">--</div></div>
+    </div>
+  </div>
+  <div style="border-left: 1px solid #ddd;"></div>
+  <div>
+    <div class="summary-group-label">Canvas (@napi-rs/canvas)</div>
+    <div class="summary-group">
+      <div class="metric"><div class="metric-label">Avg Drift</div><div class="metric-value" id="canvasAvgDrift">--</div></div>
+      <div class="metric"><div class="metric-label">Worst</div><div class="metric-value" id="canvasWorst">--</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="tables"></div>
+
+<script type="module">
+import { createMarkdownToVkPipeline, tableTransform, escapeTransform, codeSpanTransform, linkTransform, strongEmphasisTransform, emphasisTransform, strongTransform, separatorTransform, quoteTransform, checkboxTransform, headingTransform } from "../dist/index.js";
+
+const TABLES = [
+  {
+    title: "Baseline pricing table",
+    md: `| Name | Qty | Price |
+| --- | ---: | --- |
+| A | 12 | _ok_ |
+| B | 3 | 42 |
+| C | 125 | ***draft*** |`
+  },
+  {
+    title: "Mixed words and auto-number columns",
+    md: `| Left | RightWords | AutoNumbers | Cents |
+| --- | --- | --- | --- |
+| alpha | word | 10 | |
+| beta | tall | 200 | |
+| b | WWW | 3000 | |`
+  },
+  {
+    title: "Width comparison matrix",
+    md: `| Narrow | Wide | Digits | Cyrillic | C |
+| --- | --- | --- | --- | --- |
+| aaa | WWWWWW | 111111 | цифры | 3 |
+| iiil | mmmmWW | 42.90 | Юрий | |
+| ООО | ЖШЩОрб | 100000 | укоЕ | |`
+  },
+  {
+    title: "Styled comparison in the same row",
+    md: `| plain | **bold** | *italic* | ***bold+italic*** | Word 1 | Word 2 |
+| --- | --- | --- | --- | --- | --- |
+| test | **test** | *test* | ***test*** | Short | LongerText |
+| abc | **abc** | *abc* | ***abc*** | Hi | W |`
+  },
+  {
+    title: "Emoji and mixed scripts",
+    md: `| Icon | Description | Count |
+| --- | --- | ---: |
+| 🔥 | Hot item | 42 |
+| ✨ | Sparkle effect | 1 |
+| 🚀 | Launch ready | 999 |
+| 💡 | Ideas | 7 |`
+  },
+  {
+    title: "Bold header with slim body",
+    md: `| API | Status | Info |
+| --- | --- | --- |
+| iii | ok | a |
+| lll | err | bb |
+| fff | warn | ccc |`
+  },
+  {
+    title: "Currency and numbers",
+    md: `| Item | Price | Qty | Total |
+| --- | ---: | ---: | ---: |
+| Widget | $12.50 | 100 | $1,250 |
+| Gadget | €3.99 | 42 | €167.58 |
+| Thing | ₽999 | 5 | ₽4,995 |`
+  },
+  {
+    title: "Cyrillic-heavy table",
+    md: `| Имя | Фамилия | Должность |
+| --- | --- | --- |
+| Алексей | Жуков | Программист |
+| Мария | Широкова | Дизайнер |
+| Юрий | Щербаков | Менеджер |`
+  },
+];
+
+// Wait for the canvas pipeline passed from Playwright
+function waitForCanvasPipeline() {
+  return new Promise((resolve) => {
+    if (window.__CANVAS_CHUNKS__) return resolve();
+    const check = setInterval(() => {
+      if (window.__CANVAS_CHUNKS__) { clearInterval(check); resolve(); }
+    }, 50);
+  });
+}
+
+const heuristicPipeline = createMarkdownToVkPipeline();
+
+function applyFormatItems(text, items) {
+  const chars = [...text];
+  const tags = new Array(chars.length).fill(null).map(() => ({ boldStart: false, boldEnd: false, italicStart: false, italicEnd: false }));
+  for (const item of items) {
+    let charIdx = 0, codeUnitIdx = 0;
+    while (codeUnitIdx < item.offset && charIdx < chars.length) { codeUnitIdx += chars[charIdx].length; charIdx++; }
+    const startCharIdx = charIdx;
+    let remaining = item.length;
+    while (remaining > 0 && charIdx < chars.length) { remaining -= chars[charIdx].length; charIdx++; }
+    const endCharIdx = charIdx;
+    if (startCharIdx < tags.length && endCharIdx > 0) {
+      if (item.type === "bold") { tags[startCharIdx].boldStart = true; if (endCharIdx - 1 < tags.length) tags[endCharIdx - 1].boldEnd = true; }
+      if (item.type === "italic") { tags[startCharIdx].italicStart = true; if (endCharIdx - 1 < tags.length) tags[endCharIdx - 1].italicEnd = true; }
+    }
+  }
+  let html = "";
+  for (let i = 0; i < chars.length; i++) {
+    if (tags[i].boldStart) html += "<b>";
+    if (tags[i].italicStart) html += "<i>";
+    html += chars[i].replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    if (tags[i].italicEnd) html += "</i>";
+    if (tags[i].boldEnd) html += "</b>";
+  }
+  return html;
+}
+
+function renderChunk(chunk) {
+  if (!chunk) return "";
+  return applyFormatItems(chunk.text, chunk.items);
+}
+
+function measureSeparatorDrift(container) {
+  const lines = container.querySelectorAll(".vk-line");
+  if (lines.length < 2) return { score: 100, meanDrift: 0, worstDrift: 0 };
+  const linePositions = [];
+  for (const line of lines) {
+    const pipes = line.querySelectorAll(".sep-char");
+    linePositions.push([...pipes].map(p => { const r = p.getBoundingClientRect(); return r.left + r.width / 2; }));
+  }
+  const maxCols = Math.max(...linePositions.map(p => p.length));
+  if (maxCols === 0) return { score: 100, meanDrift: 0, worstDrift: 0 };
+  let totalDrift = 0, worstDrift = 0, measurements = 0;
+  for (let col = 0; col < maxCols; col++) {
+    const colPositions = linePositions.map(p => p[col]).filter(x => x !== undefined);
+    if (colPositions.length < 2) continue;
+    const mean = colPositions.reduce((a, b) => a + b, 0) / colPositions.length;
+    for (const pos of colPositions) { const d = Math.abs(pos - mean); totalDrift += d; worstDrift = Math.max(worstDrift, d); measurements++; }
+  }
+  const meanDrift = measurements > 0 ? totalDrift / measurements : 0;
+  return { score: Math.max(0, 100 - meanDrift * 10), meanDrift, worstDrift };
+}
+
+function makeSepView(html) {
+  const div = document.createElement("div");
+  div.className = "sep-view";
+  for (const lineHtml of html.split("\n")) {
+    const lineDiv = document.createElement("div");
+    lineDiv.className = "vk-line";
+    lineDiv.innerHTML = lineHtml.replace(/\|/g, '<span class="sep-char">|</span>');
+    div.appendChild(lineDiv);
+  }
+  return div;
+}
+
+async function main() {
+  // Wait for Roboto @font-face to load
+  await document.fonts.ready;
+  await waitForCanvasPipeline();
+  const canvasChunks = window.__CANVAS_CHUNKS__;
+  const container = document.getElementById("tables");
+  const allHeuristic = [], allCanvas = [];
+
+  for (let t = 0; t < TABLES.length; t++) {
+    const spec = TABLES[t];
+    const hChunk = heuristicPipeline.render(spec.md)[0];
+    const cChunk = canvasChunks[t];
+    const hHtml = renderChunk(hChunk);
+    const cHtml = renderChunk(cChunk);
+
+    const card = document.createElement("div");
+    card.className = "table-card";
+    const title = document.createElement("h2");
+    title.textContent = spec.title;
+    card.appendChild(title);
+    const source = document.createElement("div");
+    source.className = "table-source";
+    source.textContent = spec.md;
+    card.appendChild(source);
+
+    const row = document.createElement("div");
+    row.className = "compare-row";
+
+    // Heuristic column
+    const hCol = document.createElement("div");
+    hCol.className = "compare-col";
+    const hLabel = document.createElement("div");
+    hLabel.className = "compare-label";
+    hLabel.textContent = "Heuristic (text-width.ts)";
+    hCol.appendChild(hLabel);
+    const hSep = makeSepView(hHtml);
+    hCol.appendChild(hSep);
+    row.appendChild(hCol);
+
+    // Canvas column
+    const cCol = document.createElement("div");
+    cCol.className = "compare-col";
+    const cLabel = document.createElement("div");
+    cLabel.className = "compare-label";
+    cLabel.textContent = "Canvas (@napi-rs/canvas)";
+    cCol.appendChild(cLabel);
+    const cSep = makeSepView(cHtml);
+    cCol.appendChild(cSep);
+    row.appendChild(cCol);
+
+    card.appendChild(row);
+
+    // Metrics placeholder
+    const metricsDiv = document.createElement("div");
+    metricsDiv.className = "card-metrics";
+    metricsDiv.dataset.hSep = "";
+    metricsDiv.dataset.cSep = "";
+    card.appendChild(metricsDiv);
+    card._hSep = hSep;
+    card._cSep = cSep;
+    card._metricsDiv = metricsDiv;
+    container.appendChild(card);
+  }
+
+  // Measure after layout
+  requestAnimationFrame(() => {
+    const cards = container.querySelectorAll(".table-card");
+    for (const card of cards) {
+      const hMetrics = measureSeparatorDrift(card._hSep);
+      const cMetrics = measureSeparatorDrift(card._cSep);
+      allHeuristic.push(hMetrics);
+      allCanvas.push(cMetrics);
+
+      const better = cMetrics.meanDrift <= hMetrics.meanDrift;
+      if (better) card._cSep.classList.add("winner");
+      else card._hSep.classList.add("winner");
+
+      card._metricsDiv.innerHTML = `
+        <span>Heur: drift=<strong>${hMetrics.meanDrift.toFixed(2)}px</strong> worst=<strong>${hMetrics.worstDrift.toFixed(2)}px</strong></span>
+        <span>Canvas: drift=<strong class="${better ? 'card-metric-good' : 'card-metric-bad'}">${cMetrics.meanDrift.toFixed(2)}px</strong> worst=<strong class="${cMetrics.worstDrift <= hMetrics.worstDrift ? 'card-metric-good' : 'card-metric-bad'}">${cMetrics.worstDrift.toFixed(2)}px</strong></span>
+        <span>${better ? '✅ Canvas ≤' : '⚠️ Heuristic better'}</span>
+      `;
+    }
+
+    const hAvgDrift = allHeuristic.reduce((a, m) => a + m.meanDrift, 0) / allHeuristic.length;
+    const cAvgDrift = allCanvas.reduce((a, m) => a + m.meanDrift, 0) / allCanvas.length;
+    const hWorst = Math.max(...allHeuristic.map(m => m.worstDrift));
+    const cWorst = Math.max(...allCanvas.map(m => m.worstDrift));
+    const canvasWins = allCanvas.filter((c, i) => c.meanDrift <= allHeuristic[i].meanDrift).length;
+    const pass = cAvgDrift <= hAvgDrift;
+
+    document.getElementById("verdict").textContent = pass ? "PASS" : "FAIL";
+    document.getElementById("verdict").className = "verdict " + (pass ? "pass" : "fail");
+
+    const hDriftEl = document.getElementById("heuristicAvgDrift");
+    hDriftEl.textContent = hAvgDrift.toFixed(2) + "px";
+    hDriftEl.className = "metric-value " + (hAvgDrift < 2 ? "good" : hAvgDrift < 5 ? "ok" : "bad");
+
+    const hWorstEl = document.getElementById("heuristicWorst");
+    hWorstEl.textContent = hWorst.toFixed(2) + "px";
+    hWorstEl.className = "metric-value " + (hWorst < 3 ? "good" : hWorst < 8 ? "ok" : "bad");
+
+    const cDriftEl = document.getElementById("canvasAvgDrift");
+    cDriftEl.textContent = cAvgDrift.toFixed(2) + "px";
+    cDriftEl.className = "metric-value " + (cAvgDrift < 2 ? "good" : cAvgDrift < 5 ? "ok" : "bad");
+
+    const cWorstEl = document.getElementById("canvasWorst");
+    cWorstEl.textContent = cWorst.toFixed(2) + "px";
+    cWorstEl.className = "metric-value " + (cWorst < 3 ? "good" : cWorst < 8 ? "ok" : "bad");
+
+    window.__VALIDATION_RESULT__ = {
+      pass,
+      canvasWins,
+      totalTables: TABLES.length,
+      heuristic: { avgDrift: hAvgDrift, worstDrift: hWorst, tables: allHeuristic },
+      canvas: { avgDrift: cAvgDrift, worstDrift: cWorst, tables: allCanvas },
+    };
+  });
+}
+
+main();
+</script>
+</body>
+</html>

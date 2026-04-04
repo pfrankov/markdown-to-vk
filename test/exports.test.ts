@@ -16,6 +16,7 @@ import {
   strongTransform,
   tableTransform,
 } from "../src/pipeline";
+import { createCanvasTableTransform } from "../src/canvas-table-transform";
 
 describe("index exports", () => {
   it("re-exports runtime API", () => {
@@ -32,6 +33,7 @@ describe("index exports", () => {
     expect(indexExports.quoteTransform).toBe(quoteTransform);
     expect(indexExports.checkboxTransform).toBe(checkboxTransform);
     expect(indexExports.headingTransform).toBe(headingTransform);
+    expect(indexExports.createCanvasTableTransform).toBe(createCanvasTableTransform);
     expect("trimVkFormattedMessage" in indexExports).toBe(false);
     expect("collapseBlankLinesBeforeVkCodeFences" in indexExports).toBe(false);
   });

@@ -1,3 +1,7 @@
 node_modules/
 coverage/
 dist/
+.playwright-cli/
+tools/demo-screenshot.png
+tools/canvas-validation-screenshot.png
+tools/fonts/

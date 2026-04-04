@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Calibrate Glyph Widths</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Geneva, sans-serif;
+    font-size: 15px;
+    line-height: 20px;
+    padding: 20px;
+  }
+  #results { white-space: pre; font-family: monospace; font-size: 13px; }
+  .sample { position: absolute; visibility: hidden; white-space: nowrap; }
+  .sample.bold { font-weight: bold; }
+  .sample.italic { font-style: italic; }
+  .sample.bold-italic { font-weight: bold; font-style: italic; }
+</style>
+</head>
+<body>
+<h1>Glyph Width Calibration</h1>
+<div id="results">Measuring...</div>
+<div id="samples"></div>
+
+<script>
+const GLYPH_SAMPLES = {
+  emoji:              ["😀", "🎉", "❤️", "🚀", "👍", "🔥", "✨", "🎯", "💡", "🌍"],
+  cjk:                ["漢", "字", "中", "文", "日", "本", "語", "韓", "國"],
+  hangul:             ["가", "나", "다", "라", "마", "바", "사", "아", "자"],
+  digit:              ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+  currency:           ["$", "€", "₽", "£", "¥"],
+  narrowPunctuation:  [".", ",", ":", ";", "!", "'", '"', "`", "|"],
+  bracket:            ["(", ")", "[", "]", "{", "}"],
+  dash:               ["-", "_", "~", "+", "="],
+  slimLetter:         ["I", "i", "l", "j", "f", "t", "Г", "г"],
+  wideLetter:         ["M", "W", "m", "w", "Ж", "Ш", "Щ", "Ю", "Ы", "Ф", "ж", "ш", "щ", "ю", "ы", "ф"],
+  upperLetter:        ["A", "B", "C", "D", "E", "F", "G", "H", "K", "L", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "X", "Y", "Z",
+                       "А", "Б", "В", "Д", "Е", "З", "И", "К", "Л", "М", "Н", "О", "П", "Р", "С", "Т", "У", "Х", "Ц", "Ч", "Э", "Я"],
+  lowerLetter:        ["a", "b", "c", "d", "e", "g", "h", "k", "n", "o", "p", "q", "r", "s", "u", "v", "x", "y", "z",
+                       "а", "б", "в", "д", "е", "з", "и", "к", "л", "м", "н", "о", "п", "р", "с", "т", "у", "х", "ц", "ч", "э", "я"],
+  wideSymbol:         ["@", "#", "%", "&", "№"],
+  symbol:             ["^", "*", "/", "\\", "<", ">", "?"],
+};
+
+const STYLES = ["normal", "bold", "italic", "bold-italic"];
+
+function measureGlyph(char, style) {
+  const span = document.createElement("span");
+  span.textContent = char;
+  span.className = "sample" + (style !== "normal" ? " " + style : "");
+  document.getElementById("samples").appendChild(span);
+  const width = span.getBoundingClientRect().width;
+  span.remove();
+  return width;
+}
+
+function measureSpace(style) {
+  const span1 = document.createElement("span");
+  const span2 = document.createElement("span");
+  span1.innerHTML = "X X";
+  span2.innerHTML = "XX";
+  const cls = "sample" + (style !== "normal" ? " " + style : "");
+  span1.className = cls;
+  span2.className = cls;
+  const container = document.getElementById("samples");
+  container.appendChild(span1);
+  container.appendChild(span2);
+  const w = span1.getBoundingClientRect().width - span2.getBoundingClientRect().width;
+  span1.remove();
+  span2.remove();
+  return w;
+}
+
+function run() {
+  const spaceWidths = {};
+  for (const style of STYLES) {
+    spaceWidths[style] = measureSpace(style);
+  }
+
+  const results = {};
+  for (const [cls, chars] of Object.entries(GLYPH_SAMPLES)) {
+    results[cls] = {};
+    for (const style of STYLES) {
+      const widths = chars.map(ch => measureGlyph(ch, style));
+      const avg = widths.reduce((a, b) => a + b, 0) / widths.length;
+      const min = Math.min(...widths);
+      const max = Math.max(...widths);
+      results[cls][style] = { avg, min, max, widths, chars };
+    }
+  }
+
+  // Normalize: express everything in "space units" (1 unit = 1 normal space width)
+  const spaceNormal = spaceWidths.normal;
+  const normalized = {};
+  for (const [cls, styles] of Object.entries(results)) {
+    normalized[cls] = {};
+    for (const [style, data] of Object.entries(styles)) {
+      normalized[cls][style] = {
+        avgUnits: data.avg / spaceNormal,
+        minUnits: data.min / spaceNormal,
+        maxUnits: data.max / spaceNormal,
+        avgPx: data.avg,
+        chars: data.chars,
+        widthsPx: data.widths,
+      };
+    }
+  }
+
+  // Compute multipliers relative to normal
+  const multipliers = {};
+  for (const [cls, styles] of Object.entries(normalized)) {
+    multipliers[cls] = {};
+    for (const style of ["bold", "italic", "bold-italic"]) {
+      multipliers[cls][style] = styles[style].avgUnits / styles.normal.avgUnits;
+    }
+  }
+
+  // Format output for extraction
+  const output = {
+    spaceWidths,
+    spaceNormal,
+    normalized,
+    multipliers,
+    baseWidths: {},
+    boldMultipliers: {},
+    italicMultipliers: {},
+  };
+
+  // Extract the values we need for text-width.ts
+  for (const cls of Object.keys(GLYPH_SAMPLES)) {
+    output.baseWidths[cls] = Math.round(normalized[cls].normal.avgUnits * 100) / 100;
+    output.boldMultipliers[cls] = Math.round(multipliers[cls].bold * 100) / 100;
+    output.italicMultipliers[cls] = Math.round(multipliers[cls].italic * 100) / 100;
+  }
+
+  // Display summary
+  let text = "=== SPACE WIDTH (px) ===\n";
+  for (const style of STYLES) {
+    text += `  ${style}: ${spaceWidths[style].toFixed(2)}px\n`;
+  }
+  text += `\nNormalization base: 1 unit = ${spaceNormal.toFixed(2)}px (normal space)\n\n`;
+
+  text += "=== BASE WIDTHS (in space units) ===\n";
+  for (const [cls, styles] of Object.entries(normalized)) {
+    text += `  ${cls}: ${styles.normal.avgUnits.toFixed(3)} units (${styles.normal.avgPx.toFixed(2)}px)`;
+    text += ` [${styles.normal.minUnits.toFixed(2)}..${styles.normal.maxUnits.toFixed(2)}]\n`;
+  }
+
+  text += "\n=== BOLD MULTIPLIERS ===\n";
+  for (const [cls, m] of Object.entries(multipliers)) {
+    text += `  ${cls}: ${m.bold.toFixed(4)}\n`;
+  }
+
+  text += "\n=== ITALIC MULTIPLIERS ===\n";
+  for (const [cls, m] of Object.entries(multipliers)) {
+    text += `  ${cls}: ${m.italic.toFixed(4)}\n`;
+  }
+
+  text += "\n=== BOLD+ITALIC MULTIPLIERS ===\n";
+  for (const [cls, m] of Object.entries(multipliers)) {
+    text += `  ${cls}: ${m["bold-italic"].toFixed(4)} (bold*italic = ${(m.bold * m.italic).toFixed(4)})\n`;
+  }
+
+  text += "\n=== PER-GLYPH DETAIL ===\n";
+  for (const [cls, styles] of Object.entries(normalized)) {
+    text += `\n${cls}:\n`;
+    const chars = styles.normal.chars;
+    for (let i = 0; i < chars.length; i++) {
+      const nw = styles.normal.widthsPx[i] ?? 0;
+      const bw = styles.bold.widthsPx[i] ?? 0;
+      const iw = styles.italic.widthsPx[i] ?? 0;
+      text += `  '${chars[i]}': normal=${(nw/spaceNormal).toFixed(3)} bold=${(bw/spaceNormal).toFixed(3)} italic=${(iw/spaceNormal).toFixed(3)} boldMul=${(bw/nw).toFixed(4)} italicMul=${(iw/nw).toFixed(4)}\n`;
+    }
+  }
+
+  text += "\n=== CODE FOR text-width.ts ===\n";
+  text += "const BASE_WIDTHS = " + JSON.stringify(output.baseWidths, null, 2) + ";\n\n";
+  text += "const BOLD_MULTIPLIERS = " + JSON.stringify(output.boldMultipliers, null, 2) + ";\n\n";
+  text += "const ITALIC_MULTIPLIERS = " + JSON.stringify(output.italicMultipliers, null, 2) + ";\n";
+
+  document.getElementById("results").textContent = text;
+
+  // Store for Playwright extraction
+  window.__CALIBRATION_DATA__ = output;
+  window.__CALIBRATION_TEXT__ = text;
+}
+
+run();
+</script>
+</body>
+</html>

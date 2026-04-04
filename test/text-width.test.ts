@@ -28,28 +28,32 @@ describe("text width estimation", () => {
     );
   });
 
-  it("increases width for bold, italic, and combined styles", () => {
-    const plain = estimateRenderedTextWidth(render("WW"));
-    const italic = estimateRenderedTextWidth(
-      render("WW", [{ type: "italic", offset: 0, length: 2 }]),
+  it("accounts for style-specific width changes", () => {
+    const plainBoldProbe = estimateRenderedTextWidth(render("iii"));
+    const boldProbe = estimateRenderedTextWidth(
+      render("iii", [{ type: "bold", offset: 0, length: 3 }]),
     );
-    const bold = estimateRenderedTextWidth(
-      render("WW", [{ type: "bold", offset: 0, length: 2 }]),
+    const plainItalicProbe = estimateRenderedTextWidth(render("$$$"));
+    const italicProbe = estimateRenderedTextWidth(
+      render("$$$", [{ type: "italic", offset: 0, length: 3 }]),
     );
-    const boldItalic = estimateRenderedTextWidth(
-      render("WW", [
-        { type: "bold", offset: 0, length: 2 },
-        { type: "italic", offset: 0, length: 2 },
+    const boldWord = estimateRenderedTextWidth(
+      render("API width", [{ type: "bold", offset: 0, length: 9 }]),
+    );
+    const boldItalicWord = estimateRenderedTextWidth(
+      render("API width", [
+        { type: "bold", offset: 0, length: 9 },
+        { type: "italic", offset: 0, length: 9 },
       ]),
     );
-    const forcedBold = estimateRenderedTextWidth(render("WW"), {
+    const forcedBold = estimateRenderedTextWidth(render("iii"), {
       extraStyles: ["bold"],
     });
 
-    expect(italic).toBeGreaterThan(plain);
-    expect(bold).toBeGreaterThan(plain);
-    expect(boldItalic).toBeGreaterThan(bold);
-    expect(forcedBold).toBeCloseTo(bold, 5);
+    expect(boldProbe).toBeGreaterThan(plainBoldProbe);
+    expect(italicProbe).not.toBe(plainItalicProbe);
+    expect(boldItalicWord).toBeGreaterThanOrEqual(boldWord);
+    expect(forcedBold).toBeCloseTo(boldProbe, 5);
   });
 });
 
@@ -73,15 +77,15 @@ describe("table rendering with styled widths", () => {
 
     expect(rendered).not.toBeNull();
     expect(rendered?.rendered.text.split("\n")).toEqual([
-      "A | B    ",
-      "a  | WW",
-      "b  | WW ",
+      "A\u2009 | B    \u2009",
+      "a  | WW\u200A",
+      "b  | WW\u2009\u200A",
     ]);
     expect(rendered?.rendered.items).toEqual([
       { type: "bold", offset: 0, length: 1 },
-      { type: "bold", offset: 4, length: 1 },
-      { type: "bold", offset: 15, length: 2 },
-      { type: "italic", offset: 15, length: 2 },
+      { type: "bold", offset: 5, length: 1 },
+      { type: "bold", offset: 17, length: 2 },
+      { type: "italic", offset: 17, length: 2 },
     ]);
   });
 });

@@ -91,10 +91,10 @@ describe("block rules", () => {
     expect(rendered).toEqual({
       consumedTo: 5,
       rendered: {
-        text: "A | B",
+        text: "A\u200A | B\u200A",
         items: [
           { type: "bold", offset: 0, length: 1 },
-          { type: "bold", offset: 4, length: 1 },
+          { type: "bold", offset: 5, length: 1 },
         ],
       },
     });

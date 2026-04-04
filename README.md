@@ -119,6 +119,17 @@ pipeline.render("# не заголовок, **но жирный**");
 
 </details>
 
+### Таблицы
+
+`createCanvasTableTransform` — альтернатива `tableTransform`, которая измеряет ширину текста через canvas `measureText()` вместо эвристики. Точнее выравнивает колонки в VK, особенно с Кириллицей, эмодзи и жирным текстом.
+
+
+```ts
+import { createMarkdownToVkPipeline, createCanvasTableTransform } from "markdown-to-vk";
+
+const pipeline = createMarkdownToVkPipeline({ pipeline: [createCanvasTableTransform()] });
+```
+
 ## Типы
 
 Библиотека полностью типизирована. Основные типы:

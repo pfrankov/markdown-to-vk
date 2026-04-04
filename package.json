@@ -12,7 +12,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "demo": "npm run build && node tools/serve-demo.mjs",
+    "validate:canvas": "npm run build && node tools/run-canvas-validation.mjs"
   },
   "exports": {
     ".": {
@@ -24,10 +26,15 @@
     "dist",
     "index.js"
   ],
+  "dependencies": {
+    "@napi-rs/canvas": ">=0.1.46"
+  },
   "devDependencies": {
+    "@types/node": "^25.5.2",
     "@typescript-eslint/parser": "^8.46.3",
     "@vitest/coverage-v8": "^4.1.2",
     "eslint": "^9.39.1",
+    "playwright": "^1.59.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.2"
   },
