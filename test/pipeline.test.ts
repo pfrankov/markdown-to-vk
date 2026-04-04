@@ -143,6 +143,34 @@ describe("pipeline and renderer", () => {
     expectDefaultPipelineRenderedItems(chunk);
   });
 
+  it("renders inline markdown inside headings and applies heading style to the full result", () => {
+    const pipeline = createMarkdownToVkPipeline();
+    const rendered = pipeline.render("# before _italic_ [link](https://example.com) after");
+
+    expect(rendered).toEqual([
+      {
+        text: "BEFORE ITALIC LINK AFTER",
+        items: [
+          { type: "bold", offset: 0, length: 24 },
+          { type: "italic", offset: 7, length: 6 },
+          { type: "url", offset: 14, length: 4, url: "https://example.com" },
+        ],
+      },
+    ]);
+  });
+
+  it("treats headings with unicode spacing like regular headings", () => {
+    const pipeline = createMarkdownToVkPipeline();
+    const rendered = pipeline.render("###\u00A0Почему `title` не помогает");
+
+    expect(rendered).toEqual([
+      {
+        text: "Почему `title` не помогает",
+        items: [{ type: "bold", offset: 0, length: 26 }],
+      },
+    ]);
+  });
+
   it("does not parse markdown inside fenced code blocks", () => {
     const pipeline = createMarkdownToVkPipeline();
     const rendered = pipeline.render("before\n```\n**not bold**\n```\nafter");

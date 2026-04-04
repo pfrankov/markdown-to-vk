@@ -72,7 +72,7 @@ describe("block rules", () => {
     );
 
     expect(rendered).not.toBeNull();
-    expect(rendered?.rendered.text).toMatch(/1\s+\|\s+2 \| 3 \| 4/);
+    expect(rendered?.rendered.text).toMatch(/1\s+\|\s+2\s+\|\s+3 \| 4/);
     expect(rendered?.rendered.text).toContain("x");
     expect((rendered?.consumedTo ?? chunk.length) < chunk.length).toBe(true);
   });
@@ -281,6 +281,26 @@ describe("block rules", () => {
       rendered: {
         text: "T",
         items: [{ type: "italic", offset: 0, length: 1 }],
+      },
+    });
+  });
+
+  it("heading rule tolerates unicode spacing around heading markers", () => {
+    const rendered = markdownToVkBlockHeadingRule(
+      makeBlockContext({
+        chunk: "\uFEFF###\u00A0Где именно",
+        line: "\uFEFF###\u00A0Где именно",
+        nextLine: null,
+        lineBreak: -1,
+        parseInline: parseInlineIdentity,
+      }),
+    );
+
+    expect(rendered).toEqual({
+      consumedTo: 15,
+      rendered: {
+        text: "Где именно",
+        items: [{ type: "bold", offset: 0, length: 10 }],
       },
     });
   });

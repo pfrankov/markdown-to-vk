@@ -5,25 +5,37 @@ import type { VkFormatItem, VkFormatType, VkMarkdownBlockRule } from "./types.js
 export { markdownToVkBlockTableRule } from "./rules-block-table.js";
 
 const VK_SOLID_SEPARATOR = "─".repeat(3);
+const BLOCK_SYNTAX_WHITESPACE = "[\\p{White_Space}\\u200B\\u200C\\u200D\\uFEFF]";
+const HEADING_INDENT_RE = /^(?:[\p{White_Space}]{0,3})(#{1,6})(.*)$/u;
+const HEADING_SEPARATOR_RE = new RegExp(`^${BLOCK_SYNTAX_WHITESPACE}`, "u");
+const HEADING_PREFIX_SPACE_RE = new RegExp(`^${BLOCK_SYNTAX_WHITESPACE}+`, "u");
+const HEADING_CLOSING_HASHES_RE = new RegExp(
+  `${BLOCK_SYNTAX_WHITESPACE}+#+${BLOCK_SYNTAX_WHITESPACE}*$`,
+  "u",
+);
+const HEADING_TRAILING_SPACE_RE = new RegExp(`${BLOCK_SYNTAX_WHITESPACE}+$`, "u");
+
+const stripLeadingBlockSyntaxNoise = (line: string): string => line.replace(/^[\u200B\u200C\u200D\uFEFF]+/u, "");
 
 const parseAtxHeading = (line: string): { level: number; content: string } | null => {
-  const match = line.match(/^(?: {0,3})(#{1,6})(.*)$/);
+  const normalizedLine = stripLeadingBlockSyntaxNoise(line);
+  const match = normalizedLine.match(HEADING_INDENT_RE);
   if (!match) {
     return null;
   }
 
   const marker = match[1] ?? "";
   const rest = match[2] ?? "";
-  if (rest.length > 0 && !/^[\t ]/.test(rest)) {
+  if (rest.length > 0 && !HEADING_SEPARATOR_RE.test(rest)) {
     return null;
   }
 
-  const withoutPrefixSpace = rest.replace(/^[\t ]+/, "");
-  const withoutClosingHashes = withoutPrefixSpace.replace(/[\t ]+#+[\t ]*$/, "");
+  const withoutPrefixSpace = rest.replace(HEADING_PREFIX_SPACE_RE, "");
+  const withoutClosingHashes = withoutPrefixSpace.replace(HEADING_CLOSING_HASHES_RE, "");
 
   return {
     level: marker.length,
-    content: withoutClosingHashes.replace(/[\t ]+$/, ""),
+    content: withoutClosingHashes.replace(HEADING_TRAILING_SPACE_RE, ""),
   };
 };
 

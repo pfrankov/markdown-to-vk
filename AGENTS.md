@@ -32,6 +32,7 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - `src/rules-block-table.ts`: markdown table parsing and rendering.
 - `src/rules-block-utils.ts`: shared helpers for block-rule outputs.
 - `src/format-utils.ts`: format item shifting and merging helpers.
+- `src/text-width.ts`: grapheme-aware text width estimation for table layout.
 - `src/pipeline.ts`: transform wiring, parser/renderer, public runtime functions.
 - `src/index.ts`: public API exports.
 

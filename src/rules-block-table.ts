@@ -1,5 +1,6 @@
 import { shiftFormatItems } from "./format-utils.js";
 import { createBlockResult } from "./rules-block-utils.js";
+import { estimateRenderedTextWidth, TABLE_SPACE_WIDTH_UNITS } from "./text-width.js";
 import type {
   VkFormatItem,
   VkInlineParseResult,
@@ -17,21 +18,8 @@ type ParsedTable = {
   lastConsumedBreak: number;
 };
 
-const SPACE_WIDTH_UNITS = 4;
-const DEFAULT_CHAR_WIDTH = 6;
 const EMPTY_CELL: VkInlineParseResult = { text: "", items: [] };
-
-const CHAR_WIDTH_RULES: ReadonlyArray<{ pattern: RegExp; width: number }> = [
-  { pattern: /[\p{Extended_Pictographic}]/u, width: 12 },
-  { pattern: /[\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/u, width: 11 },
-  { pattern: /[MWmw@#%&ЖШЩЮЫФЖшщюыф]/u, width: 9 },
-  { pattern: /[ilI1\|'"`.,:;!]/, width: 3 },
-  { pattern: /[()\[\]{}]/, width: 4 },
-  { pattern: /[-_~]/, width: 5 },
-  { pattern: /[0-9]/, width: 7 },
-  { pattern: /[A-ZА-ЯЁ]/u, width: 7 },
-  { pattern: /[a-zа-яё]/u, width: 6 },
-];
+const HEADER_WIDTH_OPTIONS = { extraStyles: ["bold"] as const };
 
 const splitTableCells = (line: string): string[] | null => {
   const trimmed = line.trim();
@@ -131,24 +119,14 @@ const isNumericCell = (value: string): boolean => {
   );
 };
 
-const estimateCharWidth = (character: string): number => {
-  if (character === " ") {
-    return SPACE_WIDTH_UNITS;
-  }
-
-  if (character === "\t") {
-    return SPACE_WIDTH_UNITS * 4;
-  }
-
-  const matchedRule = CHAR_WIDTH_RULES.find(({ pattern }) => pattern.test(character));
-  return matchedRule?.width ?? DEFAULT_CHAR_WIDTH;
-};
-
-const estimateTextWidth = (text: string): number =>
-  [...text].reduce((sum, character) => sum + estimateCharWidth(character), 0);
-
 const getCellText = (row: VkInlineParseResult[], columnIndex: number): string =>
   row[columnIndex]?.text ?? "";
+
+const getCell = (row: VkInlineParseResult[], columnIndex: number): VkInlineParseResult =>
+  row[columnIndex] ?? EMPTY_CELL;
+
+const estimateCellWidth = (cell: VkInlineParseResult, isHeader: boolean): number =>
+  estimateRenderedTextWidth(cell, isHeader ? HEADER_WIDTH_OPTIONS : undefined);
 
 const resolveColumnWidths = (
   headerRow: VkInlineParseResult[],
@@ -156,8 +134,8 @@ const resolveColumnWidths = (
 ): number[] => {
   return headerRow.map((_, columnIndex) =>
     Math.max(
-      estimateTextWidth(getCellText(headerRow, columnIndex)),
-      ...bodyRows.map((row) => estimateTextWidth(getCellText(row, columnIndex))),
+      estimateCellWidth(getCell(headerRow, columnIndex), true),
+      ...bodyRows.map((row) => estimateCellWidth(getCell(row, columnIndex), false)),
     ),
   );
 };
@@ -186,18 +164,19 @@ const resolveHeaderAlignments = (columnCount: number): RenderableTableAlign[] =>
 };
 
 const padTableCell = (
-  text: string,
+  cell: VkInlineParseResult,
   width: number,
   alignment: RenderableTableAlign,
+  isHeader: boolean,
 ): { rendered: string; leftPad: number } => {
-  const textWidth = estimateTextWidth(text);
+  const textWidth = estimateCellWidth(cell, isHeader);
   if (width <= textWidth) {
-    return { rendered: text, leftPad: 0 };
+    return { rendered: cell.text, leftPad: 0 };
   }
 
-  const spaces = Math.max(1, Math.ceil((width - textWidth) / SPACE_WIDTH_UNITS));
+  const spaces = Math.max(1, Math.ceil((width - textWidth) / TABLE_SPACE_WIDTH_UNITS));
   if (alignment === "right") {
-    return { rendered: " ".repeat(spaces) + text, leftPad: spaces };
+    return { rendered: " ".repeat(spaces) + cell.text, leftPad: spaces };
   }
 
   if (alignment === "center") {
@@ -205,12 +184,12 @@ const padTableCell = (
     const rightPad = spaces - leftPad;
 
     return {
-      rendered: " ".repeat(leftPad) + text + " ".repeat(rightPad),
+      rendered: " ".repeat(leftPad) + cell.text + " ".repeat(rightPad),
       leftPad,
     };
   }
 
-  return { rendered: text + " ".repeat(spaces), leftPad: 0 };
+  return { rendered: cell.text + " ".repeat(spaces), leftPad: 0 };
 };
 
 const createHeaderItems = (cell: VkInlineParseResult, offset: number): VkFormatItem[] => {
@@ -236,8 +215,13 @@ const renderTableRow = (
   const items: VkFormatItem[] = [];
 
   for (let columnIndex = 0; columnIndex < widths.length; columnIndex += 1) {
-    const cell = row[columnIndex] ?? EMPTY_CELL;
-    const { rendered, leftPad } = padTableCell(cell.text, widths[columnIndex], alignments[columnIndex]);
+    const cell = getCell(row, columnIndex);
+    const { rendered, leftPad } = padTableCell(
+      cell,
+      widths[columnIndex],
+      alignments[columnIndex],
+      isHeader,
+    );
     const contentOffset = text.length + leftPad;
 
     text += rendered;
