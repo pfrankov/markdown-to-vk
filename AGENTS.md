@@ -53,7 +53,8 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - npm auto-publish is performed by the GitHub Actions workflow: `.github/workflows/publish-npm.yml`.
 - The workflow is triggered by tags matching `v*` (for example, `v1.2.3`).
 - The tag version must match `package.json` (`vMAJOR.MINOR.PATCH` <-> `MAJOR.MINOR.PATCH`), otherwise publishing fails.
-- When bumping a version, use `npm version`; the version must be updated and match in both `package.json` and `package-lock.json`.
+- When bumping a version, always use `npm version` without `--no-git-tag-version`; do not edit version fields manually and do not create the release tag by hand if `npm version` can do it.
+- The release tag created by `npm version` must be preserved and pushed together with the release commit.
 - Before publishing, the workflow runs `npm run build`, `npm run lint`, `npm test`, and `npm pack --dry-run`.
 - Publishing requires the repository secret `NPM_TOKEN`.
 
