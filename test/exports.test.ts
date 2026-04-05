@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import * as experimentalExports from "../src/experimental";
 import * as indexExports from "../src/index";
 import {
   collapseBlankLinesBeforeCodeFencesTransform,
@@ -16,10 +17,10 @@ import {
   strongTransform,
   tableTransform,
 } from "../src/pipeline";
-import { createCanvasTableTransform } from "../src/canvas-table-transform";
+import { createExperimentalCanvasTableTransform } from "../src/experimental-canvas-table-transform";
 
 describe("index exports", () => {
-  it("re-exports runtime API", () => {
+  it("re-exports stable runtime API", () => {
     expect(indexExports.createMarkdownToVkPipeline).toBe(createMarkdownToVkPipeline);
     expect(indexExports.collapseBlankLinesBeforeCodeFencesTransform).toBe(collapseBlankLinesBeforeCodeFencesTransform);
     expect(indexExports.escapeTransform).toBe(escapeTransform);
@@ -33,8 +34,14 @@ describe("index exports", () => {
     expect(indexExports.quoteTransform).toBe(quoteTransform);
     expect(indexExports.checkboxTransform).toBe(checkboxTransform);
     expect(indexExports.headingTransform).toBe(headingTransform);
-    expect(indexExports.createCanvasTableTransform).toBe(createCanvasTableTransform);
+    expect("createExperimentalCanvasTableTransform" in indexExports).toBe(false);
+    expect("createCanvasTableTransform" in indexExports).toBe(false);
     expect("trimVkFormattedMessage" in indexExports).toBe(false);
     expect("collapseBlankLinesBeforeVkCodeFences" in indexExports).toBe(false);
+  });
+
+  it("re-exports experimental runtime API from the experimental entrypoint", () => {
+    expect(experimentalExports.createExperimentalCanvasTableTransform).toBe(createExperimentalCanvasTableTransform);
+    expect("createCanvasTableTransform" in experimentalExports).toBe(false);
   });
 });

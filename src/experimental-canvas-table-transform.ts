@@ -1,13 +1,14 @@
+import { createRequire } from "node:module";
 import { createMarkdownTableBlockRule } from "./table-layout.js";
 import type { TableCellWidthResolver, TablePaddingFn } from "./table-layout.js";
 import type { VkInlineParseResult, VkMarkdownBlockTransform } from "./types.js";
 
-export type VkCanvasContext = {
+export type VkExperimentalCanvasContext = {
   measureText(text: string): { width: number };
   font: string;
 };
 
-export type VkCanvasTableTransformOptions = {
+export type VkExperimentalCanvasTableTransformOptions = {
   fontSize?: number;
   fontFamily?: string;
   emojiWidthEm?: number;
@@ -15,12 +16,22 @@ export type VkCanvasTableTransformOptions = {
 
 type WidthAffectingFormatType = "bold" | "italic";
 
-const DEFAULT_FONT_SIZE = 15;
+const DEFAULT_FONT_SIZE = 13;
 const DEFAULT_FONT_FAMILY = "sans-serif";
-const DEFAULT_EMOJI_WIDTH_EM = 1.27;
+const DEFAULT_EMOJI_WIDTH_EM = 1.23;
 
 const THIN_SPACE = "\u2009";
 const SIX_PER_EM_SPACE = "\u2006";
+const canvasRequire = createRequire(import.meta.url);
+
+// In Chromium DOM rendering, Unicode space characters have these effective widths
+// relative to a regular space, regardless of what napi/Skia measures:
+// - Thin space (U+2009): renders as ~0.5 × space (Roboto glyph is half-em)
+// - Six-per-em (U+2006): renders as 1.0 × space in DOM (Roboto lacks this glyph,
+//   falls back to full space), so the optimizer will not choose it for fine-tuning.
+// Passing DOM-correct ratios lets the optimizer avoid erroneous over-padding.
+const DOM_THIN_RATIO = 0.5;
+const DOM_SIX_PER_EM_RATIO = 1.0;
 
 const EMOJI_RE = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}]/gu;
 
@@ -75,7 +86,7 @@ const countEmoji = (text: string): number => {
 };
 
 const measureStyledText = (
-  ctx: VkCanvasContext,
+  ctx: VkExperimentalCanvasContext,
   text: string,
   items: readonly { type: string; offset: number; length: number }[],
   fontSize: number,
@@ -156,21 +167,17 @@ const createCanvasPaddingFn = (
   };
 };
 
-const measureSpaceWidths = (
-  ctx: VkCanvasContext,
+const measureSpaceWidth = (
+  ctx: VkExperimentalCanvasContext,
   fontSize: number,
   fontFamily: string,
-): { spaceWidth: number; thinSpaceWidth: number; sixPerEmWidth: number } => {
+): number => {
   ctx.font = buildFontString(fontSize, fontFamily, false, false);
-  return {
-    spaceWidth: ctx.measureText(" ").width,
-    thinSpaceWidth: ctx.measureText(THIN_SPACE).width,
-    sixPerEmWidth: ctx.measureText(SIX_PER_EM_SPACE).width,
-  };
+  return ctx.measureText(" ").width;
 };
 
 const createCanvasCellWidthResolver = (
-  ctx: VkCanvasContext,
+  ctx: VkExperimentalCanvasContext,
   fontSize: number,
   fontFamily: string,
   emojiWidthPx: number,
@@ -180,27 +187,26 @@ const createCanvasCellWidthResolver = (
     normalize(measureStyledText(ctx, cell.text, cell.items, fontSize, fontFamily, isHeader, emojiWidthPx));
 };
 
-export function createCanvasTableTransform(
-  ctx: VkCanvasContext,
-  options?: VkCanvasTableTransformOptions,
-): VkMarkdownBlockTransform {
+const buildTransform = (
+  ctx: VkExperimentalCanvasContext,
+  options: VkExperimentalCanvasTableTransformOptions | undefined,
+): VkMarkdownBlockTransform => {
   const fontSize = options?.fontSize ?? DEFAULT_FONT_SIZE;
   const fontFamily = options?.fontFamily ?? DEFAULT_FONT_FAMILY;
 
   const emojiWidthPx = fontSize * (options?.emojiWidthEm ?? DEFAULT_EMOJI_WIDTH_EM);
 
-  const { spaceWidth, thinSpaceWidth, sixPerEmWidth } = measureSpaceWidths(
-    ctx,
-    fontSize,
-    fontFamily,
-  );
+  const spaceWidth = measureSpaceWidth(ctx, fontSize, fontFamily);
 
   const normalize = (px: number): number => px / spaceWidth;
 
+  // Use DOM-correct effective widths so the optimizer avoids erroneous padding:
+  // thin space (U+2009) = 0.5 sp in DOM; six-per-em (U+2006) = 1.0 sp (full space fallback),
+  // so it is treated as a regular space and never chosen for fine-tuning.
   const paddingFn = createCanvasPaddingFn(
     normalize(spaceWidth),
-    normalize(thinSpaceWidth),
-    normalize(sixPerEmWidth),
+    DOM_THIN_RATIO,
+    DOM_SIX_PER_EM_RATIO,
   );
 
   const resolveCellWidth = createCanvasCellWidthResolver(
@@ -213,4 +219,73 @@ export function createCanvasTableTransform(
 
   const rule = createMarkdownTableBlockRule(resolveCellWidth, paddingFn);
   return Object.assign(rule, { mode: "block" as const });
+};
+
+type CanvasFactory = {
+  getContext(contextId: "2d"): VkExperimentalCanvasContext | null;
+};
+
+type CanvasModule = {
+  createCanvas(width: number, height: number): CanvasFactory;
+};
+
+const isMissingModuleError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  error.code === "MODULE_NOT_FOUND";
+
+const loadCanvasModule = (): CanvasModule => {
+  try {
+    return canvasRequire("@napi-rs/canvas") as CanvasModule;
+  } catch (error) {
+    if (isMissingModuleError(error)) {
+      throw new Error(
+        "createExperimentalCanvasTableTransform() requires the optional peer dependency @napi-rs/canvas. Install it or pass a custom canvas context.",
+        { cause: error as Error },
+      );
+    }
+
+    throw error;
+  }
+};
+
+const createDefaultCanvasContext = (): VkExperimentalCanvasContext => {
+  const ctx = loadCanvasModule().createCanvas(1, 1).getContext("2d");
+  if (ctx == null) {
+    throw new Error("createExperimentalCanvasTableTransform() could not create a 2d canvas context.");
+  }
+
+  return ctx;
+};
+
+const isCanvasContext = (
+  value: VkExperimentalCanvasContext | VkExperimentalCanvasTableTransformOptions | undefined,
+): value is VkExperimentalCanvasContext => {
+  return typeof value === "object" && value !== null && "measureText" in value;
+};
+
+export function createExperimentalCanvasTableTransform(
+  options?: VkExperimentalCanvasTableTransformOptions,
+): VkMarkdownBlockTransform;
+export function createExperimentalCanvasTableTransform(
+  ctx: VkExperimentalCanvasContext,
+  options?: VkExperimentalCanvasTableTransformOptions,
+): VkMarkdownBlockTransform;
+export function createExperimentalCanvasTableTransform(
+  ctxOrOptions?: VkExperimentalCanvasContext | VkExperimentalCanvasTableTransformOptions,
+  maybeOptions?: VkExperimentalCanvasTableTransformOptions,
+): VkMarkdownBlockTransform {
+  let ctx: VkExperimentalCanvasContext;
+  let options: VkExperimentalCanvasTableTransformOptions | undefined;
+
+  if (isCanvasContext(ctxOrOptions)) {
+    ctx = ctxOrOptions;
+    options = maybeOptions;
+  } else {
+    options = ctxOrOptions;
+    ctx = createDefaultCanvasContext();
+  }
+
+  return buildTransform(ctx, options);
 }

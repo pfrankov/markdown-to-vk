@@ -21,6 +21,7 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - Relative imports inside `src/*.ts` must use explicit `.js` specifiers to keep emitted ESM valid for Node.
 - Package exports:
   - `markdown-to-vk` -> ESM runtime from `dist/index.js`
+  - `markdown-to-vk/experimental` -> experimental helpers from `dist/experimental.js`
 
 ## Code Map
 - `src/types.ts`: public and internal types.
@@ -34,7 +35,8 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - `src/format-utils.ts`: format item shifting and merging helpers.
 - `src/table-layout.ts`: shared markdown table parsing and layout logic.
 - `src/text-width.ts`: grapheme-aware text width estimation for table layout.
-- `src/canvas-table-transform.ts`: canvas-based text measurement for precise table column alignment (uses `@napi-rs/canvas` or any compatible canvas context).
+- `src/experimental-canvas-table-transform.ts`: experimental canvas-based text measurement for table alignment; loads `@napi-rs/canvas` lazily or accepts a compatible canvas context.
+- `src/experimental.ts`: experimental package entrypoint exports.
 - `src/pipeline.ts`: transform wiring, parser/renderer, public runtime functions.
 - `src/index.ts`: public API exports.
 
@@ -45,7 +47,7 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - Tests: `npm test`
 - Watch: `npm run test:watch`
 - Coverage: `npm run test:coverage`
-- Canvas validation: `npm run validate:canvas` (compares canvas vs heuristic drift via Playwright; requires Roboto fonts in `tools/fonts/`)
+- Canvas validation: `npm run validate:canvas` (compares canvas vs heuristic drift via Playwright; requires Roboto fonts in `tools/fonts/` and an installed `@napi-rs/canvas`)
 
 ## Release and Publishing
 - npm auto-publish is performed by the GitHub Actions workflow: `.github/workflows/publish-npm.yml`.

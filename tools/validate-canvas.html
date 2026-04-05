@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Canvas vs Heuristic Table Validation</title>
+<script type="importmap">{ "imports": { "@napi-rs/canvas": "/tools/canvas-noop.js" } }</script>
 <style>
   @font-face { font-family: 'Roboto'; src: url(fonts/Roboto-Regular.ttf); font-weight: 400; font-style: normal; }
   @font-face { font-family: 'Roboto'; src: url(fonts/Roboto-Bold.ttf); font-weight: 700; font-style: normal; }
@@ -10,8 +11,8 @@
   @font-face { font-family: 'Roboto'; src: url(fonts/Roboto-BoldItalic.ttf); font-weight: 700; font-style: italic; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: Roboto, sans-serif;
-    font-size: 15px;
+    font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Geneva, "Noto Sans Armenian", "Noto Sans Bengali", "Noto Sans Cherokee", "Noto Sans Devanagari", "Noto Sans Ethiopic", "Noto Sans Georgian", "Noto Sans Hebrew", "Noto Sans Kannada", "Noto Sans Khmer", "Noto Sans Lao", "Noto Sans Osmanya", "Noto Sans Tamil", "Noto Sans Telugu", "Noto Sans Thai", arial, Tahoma, verdana, sans-serif;
+    font-size: 13px;
     line-height: 20px;
     background: #f5f5f5;
     padding: 20px;
@@ -54,7 +55,7 @@
     position: relative; display: inline-block;
     background: #f8f8f8; border-radius: 12px; padding: 10px 14px;
     font-family: Roboto, sans-serif;
-    font-size: 15px; line-height: 20px; white-space: pre-wrap;
+    font-size: 13px; line-height: 20px; white-space: pre-wrap;
   }
   .sep-char { color: red; font-weight: normal; }
 

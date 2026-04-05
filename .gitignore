@@ -5,3 +5,4 @@ dist/
 tools/demo-screenshot.png
 tools/canvas-validation-screenshot.png
 tools/fonts/
+.DS_Store

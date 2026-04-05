@@ -20,16 +20,18 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./experimental": {
+      "types": "./dist/experimental.d.ts",
+      "import": "./dist/experimental.js"
     }
   },
   "files": [
     "dist",
     "index.js"
   ],
-  "dependencies": {
-    "@napi-rs/canvas": ">=0.1.46"
-  },
   "devDependencies": {
+    "@napi-rs/canvas": ">=0.1.46",
     "@types/node": "^25.5.2",
     "@typescript-eslint/parser": "^8.46.3",
     "@vitest/coverage-v8": "^4.1.2",
@@ -37,6 +39,14 @@
     "playwright": "^1.59.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.2"
+  },
+  "peerDependencies": {
+    "@napi-rs/canvas": ">=0.1.46"
+  },
+  "peerDependenciesMeta": {
+    "@napi-rs/canvas": {
+      "optional": true
+    }
   },
   "license": "MIT",
   "author": {

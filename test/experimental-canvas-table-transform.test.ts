@@ -1,18 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { createCanvasTableTransform } from "../src/canvas-table-transform";
-import { createMarkdownToVkPipeline, tableTransform } from "../src/pipeline";
+import { createExperimentalCanvasTableTransform } from "../src/experimental-canvas-table-transform";
+import { createMarkdownToVkPipeline } from "../src/pipeline";
 import { markdownToVkBlockTableRule } from "../src/rules-block";
 import { makeBlockContext } from "./support/context";
-import type { VkInlineParseResult, VkMarkdownBlockTransform } from "../src/types";
+import type { VkMarkdownBlockTransform } from "../src/types";
 
-describe("createCanvasTableTransform", () => {
+describe("createExperimentalCanvasTableTransform", () => {
   it("returns a block transform with mode 'block'", () => {
-    const transform = createCanvasTableTransform();
+    const transform = createExperimentalCanvasTableTransform();
     expect(transform.mode).toBe("block");
   });
 
   it("renders a simple table with canvas-based measurement", () => {
-    const transform = createCanvasTableTransform();
+    const transform = createExperimentalCanvasTableTransform();
 
     const chunk = ["| Name | Value |", "| --- | --- |", "| foo | 123 |"].join("\n");
 
@@ -35,7 +35,7 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("produces bold items for header cells", () => {
-    const transform = createCanvasTableTransform();
+    const transform = createExperimentalCanvasTableTransform();
 
     const chunk = ["| A |", "| --- |", "| x |"].join("\n");
 
@@ -55,7 +55,7 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("accepts custom fontSize and fontFamily options", () => {
-    const transform = createCanvasTableTransform({
+    const transform = createExperimentalCanvasTableTransform({
       fontSize: 20,
       fontFamily: "sans-serif",
     });
@@ -77,8 +77,36 @@ describe("createCanvasTableTransform", () => {
     expect(result!.rendered.text).toContain("B");
   });
 
+  it("accepts a custom canvas context", () => {
+    const ctx = {
+      font: "",
+      measureText: (text: string) => ({ width: Math.max(text.length, 1) }),
+    };
+    const transform = createExperimentalCanvasTableTransform(ctx, {
+      fontSize: 13,
+      fontFamily: "sans-serif",
+    });
+
+    const chunk = ["| A | B |", "| --- | --- |", "| alpha | beta |"].join("\n");
+
+    const result = transform({
+      chunk,
+      line: "| A | B |",
+      lineStart: 0,
+      lineEnd: 9,
+      lineBreak: chunk.indexOf("\n"),
+      nextLine: "| --- | --- |",
+      parseInline: (s: string) => ({ text: s, items: [] }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(ctx.font).toContain("sans-serif");
+    expect(result!.rendered.text).toContain("alpha");
+    expect(result!.rendered.text).toContain("beta");
+  });
+
   it("aligns columns more evenly than heuristic transform", () => {
-    const canvasTransform = createCanvasTableTransform();
+    const canvasTransform = createExperimentalCanvasTableTransform();
 
     const chunk = [
       "| Имя | Цена |",
@@ -118,7 +146,7 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("can replace tableTransform in a pipeline", () => {
-    const canvasTable: VkMarkdownBlockTransform = createCanvasTableTransform({
+    const canvasTable: VkMarkdownBlockTransform = createExperimentalCanvasTableTransform({
       fontFamily: "sans-serif",
     });
 
@@ -136,7 +164,7 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("handles inline bold/italic formatting in cells", () => {
-    const canvasTable = createCanvasTableTransform();
+    const canvasTable = createExperimentalCanvasTableTransform();
 
     const pipeline = createMarkdownToVkPipeline({
       pipeline: [canvasTable],
@@ -150,7 +178,7 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("returns null for non-table input", () => {
-    const transform = createCanvasTableTransform();
+    const transform = createExperimentalCanvasTableTransform();
 
     const result = transform({
       chunk: "just text",
@@ -166,12 +194,12 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("uses sans-serif font by default when no options given", () => {
-    const transform = createCanvasTableTransform();
+    const transform = createExperimentalCanvasTableTransform();
     expect(transform.mode).toBe("block");
   });
 
   it("uses six-per-em space (U+2006) for padding, not hair space (U+200A)", () => {
-    const transform = createCanvasTableTransform();
+    const transform = createExperimentalCanvasTableTransform();
 
     const chunk = ["| A | LongerWord |", "| --- | --- |", "| x | y |"].join("\n");
 
@@ -192,7 +220,7 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("corrects emoji width with default emojiWidthEm", () => {
-    const transform = createCanvasTableTransform();
+    const transform = createExperimentalCanvasTableTransform();
 
     const chunk = ["| Icon | Name |", "| --- | --- |", "| 🔥 | Fire |", "| x | Ice |"].join("\n");
 
@@ -212,7 +240,7 @@ describe("createCanvasTableTransform", () => {
   });
 
   it("accepts custom emojiWidthEm option", () => {
-    const transform = createCanvasTableTransform({
+    const transform = createExperimentalCanvasTableTransform({
       emojiWidthEm: 1.0,
     });
 

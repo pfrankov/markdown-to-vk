@@ -25,10 +25,6 @@ export type {
 
 export type { TableCellWidthResolver, TablePaddingFn } from "./table-layout.js";
 
-export type { VkCanvasContext, VkCanvasTableTransformOptions } from "./canvas-table-transform.js";
-
-export { createCanvasTableTransform } from "./canvas-table-transform.js";
-
 export {
   collapseBlankLinesBeforeCodeFencesTransform,
   checkboxTransform,

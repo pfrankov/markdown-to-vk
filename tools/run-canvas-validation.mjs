@@ -5,17 +5,17 @@ import { dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
 import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
 import {
-  createCanvasTableTransform,
   createMarkdownToVkPipeline,
   tableTransform,
 } from "../dist/index.js";
+import { createExperimentalCanvasTableTransform } from "../dist/experimental.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, "..");
 const screenshotPath = resolve(__dirname, "canvas-validation-screenshot.png");
 
 const VK_FONT_FAMILY = "Roboto";
-const VK_FONT_SIZE = 15;
+const VK_FONT_SIZE = 13;
 
 // Register Roboto font files BEFORE creating canvas
 const fontsDir = resolve(__dirname, "fonts");
@@ -66,7 +66,7 @@ function startServer() {
 function renderTablesWithCanvas() {
   const canvas = createCanvas(1, 1);
   const ctx = canvas.getContext("2d");
-  const canvasTransform = createCanvasTableTransform(ctx, {
+  const canvasTransform = createExperimentalCanvasTableTransform(ctx, {
     fontSize: VK_FONT_SIZE,
     fontFamily: VK_FONT_FAMILY,
   });
