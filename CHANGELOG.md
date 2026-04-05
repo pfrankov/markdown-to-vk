@@ -1,8 +1,9 @@
 # CHANGELOG
 
-## Unreleased
+## 0.3.0
 
-- Canvas-трансформ таблиц перенесён в экспериментальный entrypoint `markdown-to-vk/experimental`, а `@napi-rs/canvas` переведён в optional peer dependency.
+- Canvas-трансформ таблиц переведён в экспериментальный API: используйте `markdown-to-vk/experimental` и `createExperimentalCanvasTableTransform`.
+- `@napi-rs/canvas` больше не ставится как обычная зависимость и подключается как optional peer dependency только для экспериментального canvas-режима.
 
 ## 0.2.0
 
