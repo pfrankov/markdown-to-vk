@@ -1,4 +1,5 @@
 import { createMarkdownToVkRenderer } from "./block-renderer.js";
+import { splitRenderedIntoChunks } from "./chunking.js";
 import { createMarkdownToVkInlineParser } from "./inline-parser.js";
 import {
   markdownToVkInlineCodeSpanRule,
@@ -16,16 +17,12 @@ import {
   markdownToVkBlockTableRule,
 } from "./rules-block.js";
 import type {
-  VkInlineParseResult,
-  VkMarkdownChunk,
-  VkFormatItem,
   VkMarkdownBlockRule,
   VkMarkdownBlockTransform,
   VkMarkdownInlineRule,
   VkMarkdownInlineTransform,
   VkMarkdownPipeline,
   VkMarkdownPipelineOptions,
-  VkMarkdownPipelineOutput,
   VkMarkdownSource,
   VkMarkdownTextTransform,
   VkMarkdownTransform,
@@ -111,51 +108,6 @@ const resolveChunkSize = (chunkSize: number | undefined): number => {
 
   const normalized = Math.floor(chunkSize);
   return normalized > 0 ? normalized : 1;
-};
-
-const clipItemToChunk = (
-  item: VkFormatItem,
-  chunkStart: number,
-  chunkEnd: number,
-): VkFormatItem | null => {
-  const itemStart = item.offset;
-  const itemEnd = item.offset + item.length;
-  const clippedStart = Math.max(itemStart, chunkStart);
-  const clippedEnd = Math.min(itemEnd, chunkEnd);
-  const clippedLength = clippedEnd - clippedStart;
-
-  if (clippedLength <= 0) {
-    return null;
-  }
-
-  return {
-    ...item,
-    offset: clippedStart - chunkStart,
-    length: clippedLength,
-  };
-};
-
-const splitRenderedIntoChunks = (
-  rendered: VkInlineParseResult,
-  chunkSize: number,
-): VkMarkdownPipelineOutput => {
-  if (rendered.text.length === 0) {
-    return [];
-  }
-
-  const chunks: VkMarkdownChunk[] = [];
-
-  for (let chunkStart = 0; chunkStart < rendered.text.length; chunkStart += chunkSize) {
-    const chunkEnd = Math.min(chunkStart + chunkSize, rendered.text.length);
-    const text = rendered.text.slice(chunkStart, chunkEnd);
-    const items = rendered.items
-      .map((item) => clipItemToChunk(item, chunkStart, chunkEnd))
-      .filter((item): item is VkFormatItem => item !== null);
-
-    chunks.push({ text, items });
-  }
-
-  return chunks;
 };
 
 export function createMarkdownToVkPipeline(options: VkMarkdownPipelineOptions = {}): VkMarkdownPipeline {
