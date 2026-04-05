@@ -1,4 +1,10 @@
 # markdown-to-vk
+<table>
+  <tr>
+    <td><img width="400" alt="markdown" src="https://github.com/user-attachments/assets/e80985e0-7f2a-4845-b28a-d57100335654" /></td>
+    <td><img width="400" alt="vk" src="https://github.com/user-attachments/assets/5f032875-df19-43e8-ba60-dd5632b7b281" /></td>
+  </tr>
+</table>
 
 Конвертирует Markdown в текст и `formatData`-сущности, совместимые с [VK API](https://dev.vk.com/ru/reference/objects/message).
 
