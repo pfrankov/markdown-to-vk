@@ -27,7 +27,7 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - `src/types.ts`: public and internal types.
 - `src/render-output.ts`: shared rendered-text buffer helpers.
 - `src/inline-parser.ts`: inline parser construction and safe rule progression.
-- `src/block-renderer.ts`: block rendering loop and fenced-code handling.
+- `src/block-renderer.ts`: цикл рендеринга блоков и обработка блоков кода в тройных обратных кавычках.
 - `src/rules-inline.ts`: inline markdown rules.
 - `src/rules-block.ts`: block markdown rules except tables.
 - `src/rules-block-table.ts`: markdown table parsing and rendering.
@@ -60,7 +60,9 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 
 ## Commits
 - Commit messages must be written in Russian.
-- A commit message should be short and include only key changes, without secondary details.
+- Describe the completed result, not an instruction.
+- Prefer a short resultative form such as `Подготовлен релиз 0.3.0`, `Уточнены правила коммитов`, or `Удалён .DS_Store`.
+- A commit message should be short and include only the key change, without secondary details.
 - Keep only the essential change in the commit message, enough to understand the purpose of the commit.
 
 ## CHANGELOG
