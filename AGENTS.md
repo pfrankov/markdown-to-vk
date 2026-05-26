@@ -56,7 +56,9 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - When bumping a version, always use `npm version` without `--no-git-tag-version`; do not edit version fields manually and do not create the release tag by hand if `npm version` can do it.
 - The release tag created by `npm version` must be preserved and pushed together with the release commit.
 - Before publishing, the workflow runs `npm run build`, `npm run lint`, `npm test`, and `npm pack --dry-run`.
-- Publishing requires the repository secret `NPM_TOKEN`.
+- npm publication uses Trusted Publisher with GitHub Actions OIDC. Do not add `NPM_TOKEN` to the workflow.
+- The npm trusted publisher must target GitHub Actions for `pfrankov/markdown-to-vk`, workflow filename `publish-npm.yml`, with `npm publish` allowed.
+- Release builds disable npm cache via `package-manager-cache: false`.
 
 ## Commits
 - Commit messages must be written in Russian.
