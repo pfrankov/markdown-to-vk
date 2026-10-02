@@ -87,3 +87,40 @@ describe("natural chunking", () => {
     }
   });
 });
+
+describe("Unicode chunk boundaries", () => {
+  it.each([1, 0, -1, 1.9])("keeps a full code point for normalized tiny budget %s", (chunkSize) => {
+    expect(createMarkdownToVkPipeline({ chunkSize }).render("**😀x**")).toEqual([
+      { text: "😀", items: [{ type: "bold", offset: 0, length: 2 }] },
+      { text: "x", items: [{ type: "bold", offset: 0, length: 1 }] },
+    ]);
+  });
+
+  it("keeps the existing indivisible @ fallback for a budget of one", () => {
+    expect(createMarkdownToVkPipeline({ chunkSize: 1 }).render("@a")).toEqual([
+      { text: "@", items: [] },
+      { text: "a", items: [] },
+    ]);
+  });
+
+  it("retreats before an emoji at the default boundary and clips URL entities", () => {
+    const prefix = "a".repeat(4095);
+    expect(createMarkdownToVkPipeline().render(`[${prefix}😀x](https://example.com)`)).toEqual([
+      { text: prefix, items: [{ type: "url", offset: 0, length: 4095, url: "https://example.com" }] },
+      { text: "😀x", items: [{ type: "url", offset: 0, length: 3, url: "https://example.com" }] },
+    ]);
+  });
+
+  it.each([1, 2, 3, 4, 7, 12, 4096])("preserves text and UTF-16 entities for budget %s", (chunkSize) => {
+    const expected = "😀@ab 🐈 слово\n\nz";
+    const markdown = `**${expected}**`;
+    const chunks = createMarkdownToVkPipeline({ chunkSize }).render(markdown);
+    expect(chunks.map((chunk) => chunk.text).join("")).toBe(expected);
+    for (const chunk of chunks) {
+      expect(chunk.text.isWellFormed()).toBe(true);
+      expect(chunk.items).toEqual([{ type: "bold", offset: 0, length: chunk.text.length }]);
+      const cost = chunk.text.length + (chunk.text.match(/@/g)?.length ?? 0);
+      expect(cost).toBeLessThanOrEqual(Math.max(chunkSize, 2));
+    }
+  });
+});

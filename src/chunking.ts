@@ -226,8 +226,8 @@ const resolveSafeHardBreak = (text: string, start: number, end: number): number 
       next >= 0xdc00 &&
       next <= 0xdfff;
 
-    if (splitsSurrogatePair && end - 1 > start) {
-      return end - 1;
+    if (splitsSurrogatePair) {
+      return end - 1 > start ? end - 1 : end + 1;
     }
   }
 

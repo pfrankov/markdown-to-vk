@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createMarkdownToVkPipeline } from "../src/pipeline";
 import { markdownToVkBlockTableRule } from "../src/rules-block-table";
@@ -26,6 +26,36 @@ describe("text width estimation", () => {
       estimateRenderedTextWidth(render("e")),
       5,
     );
+  });
+
+  it("ignores zero-width-only segments without losing UTF-16 style offsets", () => {
+    expect(estimateRenderedTextWidth(render("\u200B"))).toBe(0);
+    expect(estimateRenderedTextWidth(render("a\u200Bb"))).toBeCloseTo(
+      estimateRenderedTextWidth(render("ab")), 5,
+    );
+    expect(estimateRenderedTextWidth(render("\u200BWW", [
+      { type: "bold", offset: 1, length: 2 },
+    ]))).toBeCloseTo(estimateRenderedTextWidth(render("WW", [
+      { type: "bold", offset: 0, length: 2 },
+    ])), 5);
+  });
+
+  it("preserves the fallback width of standalone spacing marks", () => {
+    expect(estimateRenderedTextWidth(render("\u093E"))).toBe(1.82);
+  });
+
+  it("ignores invisible controls but preserves spacing marks without Intl.Segmenter", async () => {
+    vi.stubGlobal("Intl", { Segmenter: undefined });
+    try {
+      vi.resetModules();
+      const { estimateRenderedTextWidth: fallbackWidth } = await import("../src/text-width");
+      expect(fallbackWidth(render("a\u200Bb"))).toBeCloseTo(fallbackWidth(render("ab")), 5);
+      expect(fallbackWidth(render("\u093E"))).toBe(1.82);
+      expect(fallbackWidth(render("का"))).toBeCloseTo(3.92, 5);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 
   it("accounts for style-specific width changes", () => {
@@ -87,5 +117,18 @@ describe("table rendering with styled widths", () => {
       { type: "bold", offset: 17, length: 2 },
       { type: "italic", offset: 17, length: 2 },
     ]);
+  });
+});
+
+
+describe("zero-width table cells", () => {
+  it("keeps table padding unchanged when a cell contains a zero-width space", () => {
+    const pipeline = createMarkdownToVkPipeline();
+    const plain = pipeline.render("| A | B |\n| --- | --- |\n| ab | c |");
+    const invisible = pipeline.render("| A | B |\n| --- | --- |\n| a\u200Bb | c |");
+    expect(invisible).toHaveLength(1);
+    expect(invisible[0].text.replace("\u200B", "")).toBe(plain[0].text);
+    expect(invisible[0].items).toEqual(plain[0].items);
+    expect(invisible[0].text).toContain("a\u200Bb");
   });
 });

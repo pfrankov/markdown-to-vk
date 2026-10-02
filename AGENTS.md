@@ -47,6 +47,7 @@ This repository contains utilities for converting Markdown into VK-compatible pl
 - Tests: `npm test`
 - Watch: `npm run test:watch`
 - Coverage: `npm run test:coverage`
+- Pull requests and pushes to `main` run build, lint, coverage, and package checks on Node.js 22 and 24 via `.github/workflows/ci.yml`.
 - Canvas validation: `npm run validate:canvas` (compares canvas vs heuristic drift via Playwright; requires Roboto fonts in `tools/fonts/` and an installed `@napi-rs/canvas`)
 
 ## Release and Publishing
