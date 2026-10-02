@@ -1,8 +1,8 @@
 import { chromium } from "playwright";
 import { createServer } from "http";
-import { readFile } from "fs/promises";
 import { dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
+import { readDemoFile } from "./read-demo-file.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, "..");
@@ -13,9 +13,8 @@ const MIME = { ".html": "text/html", ".js": "application/javascript", ".mjs": "a
 function startServer() {
   return new Promise((ok) => {
     const server = createServer(async (req, res) => {
-      const filePath = resolve(rootDir, "." + req.url);
       try {
-        const data = await readFile(filePath);
+        const { filePath, data } = await readDemoFile(rootDir, req.url);
         res.writeHead(200, { "Content-Type": MIME[extname(filePath)] || "application/octet-stream" });
         res.end(data);
       } catch {

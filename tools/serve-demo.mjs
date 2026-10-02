@@ -1,8 +1,8 @@
 import { createServer } from "http";
-import { readFile } from "fs/promises";
 import { dirname, resolve, extname } from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
+import { readDemoFile } from "./read-demo-file.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, "..");
@@ -17,10 +17,8 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const url = req.url === "/" ? "/tools/demo-tables.html" : req.url;
-  const filePath = resolve(rootDir, "." + url);
-
   try {
-    const data = await readFile(filePath);
+    const { filePath, data } = await readDemoFile(rootDir, url);
     res.writeHead(200, { "Content-Type": MIME[extname(filePath)] || "application/octet-stream" });
     res.end(data);
   } catch {
