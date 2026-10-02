@@ -169,7 +169,7 @@ const stripZeroWidthCodePoints = (value: string): string => value.replace(ZERO_W
 
 const pickRepresentativeGlyph = (segment: string): string => {
   const visibleText = stripZeroWidthCodePoints(segment);
-  return [...visibleText][0] ?? segment;
+  return [...visibleText][0] ?? segment.replace(/[\u200B-\u200D\uFE0E\uFE0F]/gu, "");
 };
 
 const classifyLetter = (glyph: string): GlyphClass =>
